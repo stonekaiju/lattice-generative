@@ -1,1 +1,674 @@
-PLACEHOLDER_FOR_FULL_CONTENT
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lattice Generative v6 — Audio Reactive</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --panel: #1a1a1a;
+    --text: #e8e8e8;
+    --muted: #888;
+    --accent: #e85d04;
+    --border: #2a2a2a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+  body.fullscreen #sidebar { display: none; }
+  body.fullscreen #canvas-wrap {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 9999;
+  }
+  body.fullscreen canvas {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none;
+    max-height: none;
+    object-fit: contain;
+    box-shadow: none;
+  }
+  #sidebar {
+    width: 360px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 18px;
+    flex-shrink: 0;
+  }
+  h1 { margin: 0 0 4px 0; font-size: 16px; font-weight: 600; }
+  .sub { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+  .section {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section h2 {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 8px 0 3px 0;
+    font-size: 13px;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .value { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .color-row { display: flex; gap: 6px; margin-top: 4px; }
+  input[type="color"] { width: 48px; height: 32px; border: 1px solid #444; border-radius: 4px; background: none; cursor: pointer; padding: 0; }
+  button {
+    width: 100%;
+    margin-top: 6px;
+    padding: 8px;
+    background: #252525;
+    color: white;
+    border: 1px solid #333;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  button:hover { background: #2e2e2e; }
+  button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  select, input[type="checkbox"] { margin-top: 4px; }
+  select {
+    width: 100%;
+    padding: 6px;
+    background: #222;
+    color: white;
+    border: 1px solid #333;
+    border-radius: 4px;
+  }
+  #canvas-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0a;
+    position: relative;
+  }
+  canvas { max-width: 100%; max-height: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+  .center-info { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .anim-controls { display: flex; gap: 6px; margin-top: 6px; }
+  .anim-controls button { margin: 0; flex: 1; }
+  .layer-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .layer-toggle input { margin: 0; }
+  .drag-selector { display: flex; gap: 6px; margin-top: 6px; }
+  .drag-selector label {
+    flex: 1;
+    margin: 0;
+    padding: 6px;
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .drag-selector input { display: none; }
+  .drag-selector input:checked + span,
+  .drag-selector label:has(input:checked) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .audio-controls { display: flex; flex-direction: column; gap: 6px; }
+  input[type="file"] { font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Lattice Generative v6</h1>
+  <div class="sub">Audio reactive · Golden falloff · Layers</div>
+
+  <div class="section">
+    <h2>Audio Reactive</h2>
+    <div class="audio-controls">
+      <button id="mic-btn" onclick="toggleMic()">Enable Microphone</button>
+      <label>Load audio or video (Suno, etc.)</label>
+      <input type="file" id="media-file" accept="audio/*,video/*">
+      <button id="media-play-btn" onclick="toggleMediaPlayback()" disabled>Play Media</button>
+    </div>
+    <label>Audio Strength <span class="value" id="v-audio-str">0.6</span></label>
+    <input type="range" id="audio-strength" min="0" max="1.5" step="0.05" value="0.6">
+    <div class="hint">Bass → size · Mid → density · Treble → falloff / orbit<br>Works with audio files and video (Suno, etc.)</div>
+  </div>
+
+  <div class="section">
+    <h2>Drag Layer</h2>
+    <div class="drag-selector">
+      <label><input type="radio" name="drag-layer" value="A" checked><span>A</span></label>
+      <label><input type="radio" name="drag-layer" value="B"><span>B</span></label>
+      <label><input type="radio" name="drag-layer" value="C"><span>C</span></label>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Global</h2>
+    <label>Shape</label>
+    <select id="shape">
+      <option value="circle">Circles</option>
+      <option value="square">Squares</option>
+      <option value="hex">Hexagons</option>
+      <option value="organic">Organic</option>
+    </select>
+    <label>Golden Influence <span class="value" id="v-phi">0.65</span></label>
+    <input type="range" id="phi" min="0" max="1" step="0.01" value="0.65">
+    <label>Background</label>
+    <div class="color-row">
+      <input type="color" id="bg" value="#0a0a0a">
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Layer A <span style="float:right"><label class="layer-toggle"><input type="checkbox" id="a-on" checked> On</label></span></h2>
+    <label>Density <span class="value" id="va-density">32</span></label>
+    <input type="range" id="a-density" min="8" max="70" value="32">
+    <label>Base Size <span class="value" id="va-size">26</span></label>
+    <input type="range" id="a-size" min="4" max="50" value="26">
+    <label>Falloff <span class="value" id="va-falloff">1.5</span></label>
+    <input type="range" id="a-falloff" min="0.2" max="4" step="0.1" value="1.5">
+    <label>Min Size <span class="value" id="va-min">2</span></label>
+    <input type="range" id="a-min" min="0.5" max="10" step="0.5" value="2">
+    <label style="margin-top:10px">Color</label>
+    <div class="color-row"><input type="color" id="a-color" value="#e85d04"></div>
+    <div class="center-info" id="a-center-info">—</div>
+  </div>
+
+  <div class="section">
+    <h2>Layer B <span style="float:right"><label class="layer-toggle"><input type="checkbox" id="b-on" checked> On</label></span></h2>
+    <label>Density <span class="value" id="vb-density">38</span></label>
+    <input type="range" id="b-density" min="8" max="70" value="38">
+    <label>Base Size <span class="value" id="vb-size">20</span></label>
+    <input type="range" id="b-size" min="4" max="50" value="20">
+    <label>Falloff <span class="value" id="vb-falloff">2.0</span></label>
+    <input type="range" id="b-falloff" min="0.2" max="4" step="0.1" value="2.0">
+    <label>Min Size <span class="value" id="vb-min">1.5</span></label>
+    <input type="range" id="b-min" min="0.5" max="10" step="0.5" value="1.5">
+    <label style="margin-top:10px">Color</label>
+    <div class="color-row"><input type="color" id="b-color" value="#ff4d4d"></div>
+    <div class="center-info" id="b-center-info">—</div>
+  </div>
+
+  <div class="section">
+    <h2>Layer C <span style="float:right"><label class="layer-toggle"><input type="checkbox" id="c-on" checked> On</label></span></h2>
+    <label>Density <span class="value" id="vc-density">28</span></label>
+    <input type="range" id="c-density" min="8" max="70" value="28">
+    <label>Base Size <span class="value" id="vc-size">16</span></label>
+    <input type="range" id="c-size" min="4" max="50" value="16">
+    <label>Falloff <span class="value" id="vc-falloff">1.8</span></label>
+    <input type="range" id="c-falloff" min="0.2" max="4" step="0.1" value="1.8">
+    <label>Min Size <span class="value" id="vc-min">1</span></label>
+    <input type="range" id="c-min" min="0.5" max="10" step="0.5" value="1">
+    <label style="margin-top:10px">Color</label>
+    <div class="color-row"><input type="color" id="c-color" value="#4a6fa5"></div>
+    <div class="center-info" id="c-center-info">—</div>
+  </div>
+
+  <div class="section">
+    <h2>Interference</h2>
+    <label>Mode</label>
+    <select id="mode">
+      <option value="overlay">Overlay</option>
+      <option value="difference">Difference</option>
+      <option value="multiply">Multiply</option>
+      <option value="screen">Screen</option>
+      <option value="exclusion">Exclusion</option>
+    </select>
+    <label>Layer B Opacity <span class="value" id="v-op-b">0.7</span></label>
+    <input type="range" id="op-b" min="0" max="1" step="0.01" value="0.7">
+    <label>Layer C Opacity <span class="value" id="v-op-c">0.55</span></label>
+    <input type="range" id="op-c" min="0" max="1" step="0.01" value="0.55">
+  </div>
+
+  <div class="section">
+    <h2>Animation (Moiré)</h2>
+    <div class="anim-controls">
+      <button id="anim-btn" onclick="toggleAnim()">Play</button>
+      <button onclick="resetAnim()">Reset</button>
+      <button onclick="toggleFullscreen()">Fullscreen</button>
+    </div>
+    <label>Speed <span class="value" id="v-speed">0.4</span></label>
+    <input type="range" id="speed" min="0.05" max="2" step="0.05" value="0.4">
+    <label>Orbit Radius <span class="value" id="v-orbit">0.12</span></label>
+    <input type="range" id="orbit" min="0" max="0.3" step="0.01" value="0.12">
+  </div>
+
+  <button onclick="randomize()">Randomize</button>
+  <button class="primary" onclick="downloadPNG()">Download PNG</button>
+  <div class="hint">
+    Enable mic or load a file for audio reactivity.<br>
+    Bass expands sizes, mid increases density, treble affects falloff.
+  </div>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="c" width="1000" height="1000"></canvas>
+</div>
+
+<script>
+const PHI = (1 + Math.sqrt(5)) / 2;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let centerA = { x: 0.35, y: 0.5 };
+let centerB = { x: 0.65, y: 0.5 };
+let centerC = { x: 0.5, y: 0.35 };
+let animating = false;
+let animTime = 0;
+let animId = null;
+let dragging = null;
+
+// Audio
+let audioContext = null;
+let analyser = null;
+let dataArray = null;
+let source = null;
+let micStream = null;
+let audioElement = null;
+let isMicOn = false;
+let isAudioPlaying = false;
+let bass = 0, mid = 0, treble = 0;
+
+const controls = {
+  shape: document.getElementById('shape'),
+  phi: document.getElementById('phi'),
+  bg: document.getElementById('bg'),
+  aOn: document.getElementById('a-on'),
+  aDensity: document.getElementById('a-density'),
+  aSize: document.getElementById('a-size'),
+  aFalloff: document.getElementById('a-falloff'),
+  aMin: document.getElementById('a-min'),
+  aColor: document.getElementById('a-color'),
+  bOn: document.getElementById('b-on'),
+  bDensity: document.getElementById('b-density'),
+  bSize: document.getElementById('b-size'),
+  bFalloff: document.getElementById('b-falloff'),
+  bMin: document.getElementById('b-min'),
+  bColor: document.getElementById('b-color'),
+  cOn: document.getElementById('c-on'),
+  cDensity: document.getElementById('c-density'),
+  cSize: document.getElementById('c-size'),
+  cFalloff: document.getElementById('c-falloff'),
+  cMin: document.getElementById('c-min'),
+  cColor: document.getElementById('c-color'),
+  mode: document.getElementById('mode'),
+  opB: document.getElementById('op-b'),
+  opC: document.getElementById('op-c'),
+  speed: document.getElementById('speed'),
+  orbit: document.getElementById('orbit'),
+  audioStrength: document.getElementById('audio-strength')
+};
+
+function getSelectedDragLayer() {
+  const checked = document.querySelector('input[name="drag-layer"]:checked');
+  return checked ? checked.value : 'A';
+}
+
+function updateLabels() {
+  document.getElementById('v-phi').textContent = parseFloat(controls.phi.value).toFixed(2);
+  document.getElementById('va-density').textContent = controls.aDensity.value;
+  document.getElementById('va-size').textContent = controls.aSize.value;
+  document.getElementById('va-falloff').textContent = parseFloat(controls.aFalloff.value).toFixed(1);
+  document.getElementById('va-min').textContent = controls.aMin.value;
+  document.getElementById('vb-density').textContent = controls.bDensity.value;
+  document.getElementById('vb-size').textContent = controls.bSize.value;
+  document.getElementById('vb-falloff').textContent = parseFloat(controls.bFalloff.value).toFixed(1);
+  document.getElementById('vb-min').textContent = controls.bMin.value;
+  document.getElementById('vc-density').textContent = controls.cDensity.value;
+  document.getElementById('vc-size').textContent = controls.cSize.value;
+  document.getElementById('vc-falloff').textContent = parseFloat(controls.cFalloff.value).toFixed(1);
+  document.getElementById('vc-min').textContent = controls.cMin.value;
+  document.getElementById('v-op-b').textContent = parseFloat(controls.opB.value).toFixed(2);
+  document.getElementById('v-op-c').textContent = parseFloat(controls.opC.value).toFixed(2);
+  document.getElementById('v-speed').textContent = parseFloat(controls.speed.value).toFixed(2);
+  document.getElementById('v-orbit').textContent = parseFloat(controls.orbit.value).toFixed(2);
+  document.getElementById('v-audio-str').textContent = parseFloat(controls.audioStrength.value).toFixed(2);
+  document.getElementById('a-center-info').textContent = `A: ${(centerA.x*100).toFixed(0)}%, ${(centerA.y*100).toFixed(0)}%`;
+  document.getElementById('b-center-info').textContent = `B: ${(centerB.x*100).toFixed(0)}%, ${(centerB.y*100).toFixed(0)}%`;
+  document.getElementById('c-center-info').textContent = `C: ${(centerC.x*100).toFixed(0)}%, ${(centerC.y*100).toFixed(0)}%`;
+}
+
+function setupAudio() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+  }
+}
+
+async function toggleMic() {
+  setupAudio();
+  if (isMicOn) {
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    isMicOn = false;
+    document.getElementById('mic-btn').textContent = 'Enable Microphone';
+    return;
+  }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    source = audioContext.createMediaStreamSource(micStream);
+    source.connect(analyser);
+    isMicOn = true;
+    document.getElementById('mic-btn').textContent = 'Stop Microphone';
+  } catch (e) {
+    alert('Microphone access denied or unavailable.');
+  }
+}
+
+let mediaElement = null;
+
+document.getElementById('media-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setupAudio();
+  if (mediaElement) {
+    mediaElement.pause();
+    if (mediaElement.tagName === 'VIDEO') mediaElement.remove();
+  }
+  const url = URL.createObjectURL(file);
+  const isVideo = file.type.startsWith('video/');
+  if (isVideo) {
+    mediaElement = document.createElement('video');
+    mediaElement.style.display = 'none';
+    document.body.appendChild(mediaElement);
+  } else {
+    mediaElement = new Audio();
+  }
+  mediaElement.src = url;
+  mediaElement.loop = true;
+  mediaElement.crossOrigin = 'anonymous';
+  source = audioContext.createMediaElementSource(mediaElement);
+  source.connect(analyser);
+  analyser.connect(audioContext.destination);
+  document.getElementById('media-play-btn').disabled = false;
+  document.getElementById('media-play-btn').textContent = 'Play Media';
+});
+
+function toggleMediaPlayback() {
+  if (!mediaElement) return;
+  if (isAudioPlaying) {
+    mediaElement.pause();
+    isAudioPlaying = false;
+    document.getElementById('media-play-btn').textContent = 'Play Media';
+  } else {
+    audioContext.resume();
+    mediaElement.play();
+    isAudioPlaying = true;
+    document.getElementById('media-play-btn').textContent = 'Pause Media';
+  }
+}
+
+function updateAudioData() {
+  if (!analyser || !dataArray) return;
+  analyser.getByteFrequencyData(dataArray);
+  const len = dataArray.length;
+  let b = 0, m = 0, t = 0;
+  for (let i = 0; i < len * 0.15; i++) b += dataArray[i];
+  for (let i = Math.floor(len * 0.15); i < len * 0.5; i++) m += dataArray[i];
+  for (let i = Math.floor(len * 0.5); i < len; i++) t += dataArray[i];
+  bass = (b / (len * 0.15 * 255)) || 0;
+  mid = (m / (len * 0.35 * 255)) || 0;
+  treble = (t / (len * 0.5 * 255)) || 0;
+}
+
+function drawShape(x, y, size, shape, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  if (shape === 'circle') {
+    ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+  } else if (shape === 'square') {
+    ctx.rect(x - size * 0.4, y - size * 0.4, size * 0.8, size * 0.8);
+  } else if (shape === 'hex') {
+    const r = size * 0.48;
+    for (let i = 0; i < 6; i++) {
+      const ang = (Math.PI / 3) * i - Math.PI / 6;
+      const px = x + r * Math.cos(ang);
+      const py = y + r * Math.sin(ang);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  } else if (shape === 'organic') {
+    const r = size * 0.5;
+    ctx.moveTo(x + r, y);
+    for (let i = 1; i <= 8; i++) {
+      const ang = (Math.PI * 2 / 8) * i;
+      const rr = r * (0.75 + 0.25 * Math.sin(ang * 3 + x * 0.01));
+      ctx.lineTo(x + rr * Math.cos(ang), y + rr * Math.sin(ang));
+    }
+    ctx.closePath();
+  }
+  ctx.fill();
+}
+
+function drawField(cx, cy, density, baseSize, falloff, minSize, color, w, h, shape, phiStrength, audioMod) {
+  const cols = Math.max(6, density + audioMod.density);
+  const rows = Math.floor(cols * 0.82);
+  const spacingX = w / (cols + 1);
+  const spacingY = h / (rows + 1);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = (c + 1) * spacingX;
+      const y = (r + 1) * spacingY;
+      const dx = x - cx * w;
+      const dy = y - cy * h;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const maxDist = Math.sqrt(w * w + h * h) * 0.48;
+      const t = Math.min(1, dist / maxDist);
+
+      const goldenDecay = Math.pow(PHI, -t * 2.2 * phiStrength);
+      const powerFalloff = Math.pow(1 - t, falloff + audioMod.falloff);
+      const blended = powerFalloff * (1 - phiStrength * 0.45) + goldenDecay * (phiStrength * 0.45);
+      const size = Math.max(minSize, (baseSize + audioMod.size) * blended);
+
+      if (size > 1) drawShape(x, y, size, shape, color);
+    }
+  }
+}
+
+function getAnimatedCenter(base, phase) {
+  if (!animating && !isMicOn && !isAudioPlaying) return base;
+  const orbit = parseFloat(controls.orbit.value) + (treble * 0.08 * parseFloat(controls.audioStrength.value));
+  const speed = parseFloat(controls.speed.value);
+  const t = animTime * speed + phase;
+  return {
+    x: base.x + Math.cos(t) * orbit,
+    y: base.y + Math.sin(t * 0.7) * orbit
+  };
+}
+
+function draw() {
+  updateAudioData();
+  const strength = parseFloat(controls.audioStrength.value);
+  const audioMod = {
+    size: bass * 22 * strength,
+    density: mid * 18 * strength,
+    falloff: treble * 1.2 * strength
+  };
+
+  const w = canvas.width, h = canvas.height;
+  const shape = controls.shape.value;
+  const phiStrength = parseFloat(controls.phi.value);
+
+  ctx.fillStyle = controls.bg.value;
+  ctx.fillRect(0, 0, w, h);
+
+  const cA = getAnimatedCenter(centerA, 0);
+  const cB = getAnimatedCenter(centerB, 2.1);
+  const cC = getAnimatedCenter(centerC, 4.2);
+
+  if (controls.aOn.checked) {
+    drawField(cA.x, cA.y, +controls.aDensity.value, +controls.aSize.value, +controls.aFalloff.value, +controls.aMin.value, controls.aColor.value, w, h, shape, phiStrength, audioMod);
+  }
+
+  if (controls.bOn.checked) {
+    ctx.save();
+    ctx.globalAlpha = +controls.opB.value;
+    const mode = controls.mode.value;
+    if (mode !== 'overlay') {
+      ctx.globalCompositeOperation = mode === 'difference' ? 'difference' : mode === 'multiply' ? 'multiply' : mode === 'screen' ? 'screen' : mode === 'exclusion' ? 'exclusion' : 'source-over';
+    }
+    drawField(cB.x, cB.y, +controls.bDensity.value, +controls.bSize.value, +controls.bFalloff.value, +controls.bMin.value, controls.bColor.value, w, h, shape, phiStrength, audioMod);
+    ctx.restore();
+  }
+
+  if (controls.cOn.checked) {
+    ctx.save();
+    ctx.globalAlpha = +controls.opC.value;
+    const mode = controls.mode.value;
+    if (mode !== 'overlay') ctx.globalCompositeOperation = mode === 'difference' ? 'difference' : mode === 'multiply' ? 'multiply' : mode === 'screen' ? 'screen' : mode === 'exclusion' ? 'exclusion' : 'source-over';
+    drawField(cC.x, cC.y, +controls.cDensity.value, +controls.cSize.value, +controls.cFalloff.value, +controls.cMin.value, controls.cColor.value, w, h, shape, phiStrength, audioMod);
+    ctx.restore();
+  }
+
+  updateLabels();
+}
+
+function loop() {
+  if (!animating && !isMicOn && !isAudioPlaying) return;
+  animTime += 0.016;
+  draw();
+  animId = requestAnimationFrame(loop);
+}
+
+function toggleAnim() {
+  animating = !animating;
+  document.getElementById('anim-btn').textContent = animating ? 'Pause' : 'Play';
+  if (animating || isMicOn || isAudioPlaying) loop();
+  else cancelAnimationFrame(animId);
+}
+
+function resetAnim() {
+  animTime = 0;
+  draw();
+}
+
+function toggleFullscreen() {
+  document.body.classList.toggle('fullscreen');
+  if (document.body.classList.contains('fullscreen')) {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  } else {
+    document.exitFullscreen?.().catch(() => {});
+  }
+}
+
+function randomize() {
+  ['a','b','c'].forEach(l => {
+    controls[l+'Density'].value = Math.floor(14 + Math.random()*40);
+    controls[l+'Size'].value = Math.floor(10 + Math.random()*28);
+    controls[l+'Falloff'].value = (0.7 + Math.random()*2.2).toFixed(1);
+  });
+  controls.phi.value = (0.3 + Math.random()*0.7).toFixed(2);
+  centerA = { x: 0.2+Math.random()*0.6, y: 0.2+Math.random()*0.6 };
+  centerB = { x: 0.2+Math.random()*0.6, y: 0.2+Math.random()*0.6 };
+  centerC = { x: 0.2+Math.random()*0.6, y: 0.2+Math.random()*0.6 };
+  draw();
+}
+
+function downloadPNG() {
+  const a = document.createElement('a');
+  a.download = `lattice-v6-${Date.now()}.png`;
+  a.href = canvas.toDataURL('image/png');
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function getMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) / rect.width,
+    y: (e.clientY - rect.top) / rect.height
+  };
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  const pos = getMousePos(e);
+  dragging = getSelectedDragLayer();
+  canvas.classList.add('dragging');
+  updateCenter(dragging, pos);
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  updateCenter(dragging, getMousePos(e));
+});
+
+function endDrag() {
+  dragging = null;
+  canvas.classList.remove('dragging');
+}
+canvas.addEventListener('mouseup', endDrag);
+canvas.addEventListener('mouseleave', endDrag);
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const pos = getMousePos(touch);
+  dragging = getSelectedDragLayer();
+  canvas.classList.add('dragging');
+  updateCenter(dragging, pos);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!dragging) return;
+  const touch = e.touches[0];
+  updateCenter(dragging, getMousePos(touch));
+}, { passive: false });
+
+canvas.addEventListener('touchend', endDrag);
+
+function updateCenter(layer, pos) {
+  if (layer === 'A') { centerA.x = pos.x; centerA.y = pos.y; }
+  else if (layer === 'B') { centerB.x = pos.x; centerB.y = pos.y; }
+  else if (layer === 'C') { centerC.x = pos.x; centerC.y = pos.y; }
+  draw();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.body.classList.contains('fullscreen')) {
+    document.body.classList.remove('fullscreen');
+    document.exitFullscreen?.().catch(() => {});
+  }
+});
+
+Object.values(controls).forEach(el => {
+  if (el) el.addEventListener('input', draw);
+  if (el && el.type === 'checkbox') el.addEventListener('change', draw);
+});
+
+document.querySelectorAll('input[name="drag-layer"]').forEach(el => {
+  el.addEventListener('change', () => {});
+});
+
+// Start loop if needed
+function ensureLoop() {
+  if ((animating || isMicOn || isAudioPlaying) && !animId) loop();
+}
+setInterval(ensureLoop, 500);
+
+draw();
+</script>
+</body>
+</html>
