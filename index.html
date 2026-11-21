@@ -70,7 +70,7 @@
   input[type="range"] { width: 100%; accent-color: var(--accent); }
   .value { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
   .color-row { display: flex; gap: 6px; margin-top: 4px; }
-  input[type="color"] { width: 32px; height: 26px; border: none; background: none; cursor: pointer; }
+  input[type="color"] { width: 48px; height: 32px; border: 1px solid #444; border-radius: 4px; background: none; cursor: pointer; padding: 0; }
   button {
     width: 100%;
     margin-top: 6px;
@@ -173,6 +173,7 @@
     <input type="range" id="a-falloff" min="0.2" max="4" step="0.1" value="1.5">
     <label>Min Size <span class="value" id="va-min">2</span></label>
     <input type="range" id="a-min" min="0.5" max="10" step="0.5" value="2">
+    <label style="margin-top:10px">Color</label>
     <div class="color-row"><input type="color" id="a-color" value="#1a1a1a"></div>
     <div class="center-info" id="a-center-info">—</div>
   </div>
@@ -187,6 +188,7 @@
     <input type="range" id="b-falloff" min="0.2" max="4" step="0.1" value="2.0">
     <label>Min Size <span class="value" id="vb-min">1.5</span></label>
     <input type="range" id="b-min" min="0.5" max="10" step="0.5" value="1.5">
+    <label style="margin-top:10px">Color</label>
     <div class="color-row"><input type="color" id="b-color" value="#e85d04"></div>
     <div class="center-info" id="b-center-info">—</div>
   </div>
@@ -201,6 +203,7 @@
     <input type="range" id="c-falloff" min="0.2" max="4" step="0.1" value="1.8">
     <label>Min Size <span class="value" id="vc-min">1</span></label>
     <input type="range" id="c-min" min="0.5" max="10" step="0.5" value="1">
+    <label style="margin-top:10px">Color</label>
     <div class="color-row"><input type="color" id="c-color" value="#4a6fa5"></div>
     <div class="center-info" id="c-center-info">—</div>
   </div>
