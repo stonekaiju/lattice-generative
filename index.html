@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Lattice Generative v4 — Golden Falloff</title>
+<title>Lattice Generative v5 — Layer Selector</title>
 <style>
   :root {
     --bg: #0f0f0f;
@@ -109,13 +109,42 @@
   .anim-controls button { margin: 0; flex: 1; }
   .layer-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
   .layer-toggle input { margin: 0; }
+  .drag-selector { display: flex; gap: 6px; margin-top: 6px; }
+  .drag-selector label {
+    flex: 1;
+    margin: 0;
+    padding: 6px;
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .drag-selector input { display: none; }
+  .drag-selector input:checked + span,
+  .drag-selector label:has(input:checked) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
 </style>
 </head>
 <body>
 
 <div id="sidebar">
-  <h1>Lattice Generative v4</h1>
-  <div class="sub">Golden-ratio falloff · Drag · Fullscreen</div>
+  <h1>Lattice Generative v5</h1>
+  <div class="sub">Select layer to drag · Golden falloff</div>
+
+  <div class="section">
+    <h2>Drag Layer</h2>
+    <div class="drag-selector">
+      <label><input type="radio" name="drag-layer" value="A" checked><span>A</span></label>
+      <label><input type="radio" name="drag-layer" value="B"><span>B</span></label>
+      <label><input type="radio" name="drag-layer" value="C"><span>C</span></label>
+    </div>
+    <div class="hint" style="margin-top:8px">Select a layer, then drag on the canvas to move its center.</div>
+  </div>
 
   <div class="section">
     <h2>Global</h2>
@@ -145,7 +174,7 @@
     <label>Min Size <span class="value" id="va-min">2</span></label>
     <input type="range" id="a-min" min="0.5" max="10" step="0.5" value="2">
     <div class="color-row"><input type="color" id="a-color" value="#1a1a1a"></div>
-    <div class="center-info" id="a-center-info">Drag on canvas</div>
+    <div class="center-info" id="a-center-info">—</div>
   </div>
 
   <div class="section">
@@ -159,7 +188,7 @@
     <label>Min Size <span class="value" id="vb-min">1.5</span></label>
     <input type="range" id="b-min" min="0.5" max="10" step="0.5" value="1.5">
     <div class="color-row"><input type="color" id="b-color" value="#e85d04"></div>
-    <div class="center-info" id="b-center-info">Shift+drag</div>
+    <div class="center-info" id="b-center-info">—</div>
   </div>
 
   <div class="section">
@@ -173,7 +202,7 @@
     <label>Min Size <span class="value" id="vc-min">1</span></label>
     <input type="range" id="c-min" min="0.5" max="10" step="0.5" value="1">
     <div class="color-row"><input type="color" id="c-color" value="#4a6fa5"></div>
-    <div class="center-info" id="c-center-info">Alt+drag</div>
+    <div class="center-info" id="c-center-info">—</div>
   </div>
 
   <div class="section">
@@ -208,9 +237,8 @@
   <button onclick="randomize()">Randomize</button>
   <button class="primary" onclick="downloadPNG()">Download PNG</button>
   <div class="hint">
-    Drag = A · Shift+drag = B · Alt+drag = C<br>
-    Golden Influence shapes size falloff (φ ≈ 1.618).<br>
-    Fullscreen for capture (Esc to exit). On iOS, try opening the file in Safari for reliable downloads.
+    Select a layer above, then drag on the canvas to move its center.<br>
+    Golden Influence shapes size falloff (φ ≈ 1.618).
   </div>
 </div>
 
@@ -259,6 +287,11 @@ const controls = {
   speed: document.getElementById('speed'),
   orbit: document.getElementById('orbit')
 };
+
+function getSelectedDragLayer() {
+  const checked = document.querySelector('input[name="drag-layer"]:checked');
+  return checked ? checked.value : 'A';
+}
 
 function updateLabels() {
   document.getElementById('v-phi').textContent = parseFloat(controls.phi.value).toFixed(2);
@@ -329,7 +362,6 @@ function drawField(cx, cy, density, baseSize, falloff, minSize, color, w, h, sha
       const maxDist = Math.sqrt(w * w + h * h) * 0.48;
       const t = Math.min(1, dist / maxDist);
 
-      // Golden-informed falloff: blend linear power with φ-scaled decay
       const goldenDecay = Math.pow(PHI, -t * 2.2 * phiStrength);
       const powerFalloff = Math.pow(1 - t, falloff);
       const blended = powerFalloff * (1 - phiStrength * 0.45) + goldenDecay * (phiStrength * 0.45);
@@ -433,7 +465,7 @@ function randomize() {
 
 function downloadPNG() {
   const a = document.createElement('a');
-  a.download = `lattice-v4-${Date.now()}.png`;
+  a.download = `lattice-v5-${Date.now()}.png`;
   a.href = canvas.toDataURL('image/png');
   document.body.appendChild(a);
   a.click();
@@ -450,9 +482,7 @@ function getMousePos(e) {
 
 canvas.addEventListener('mousedown', (e) => {
   const pos = getMousePos(e);
-  if (e.altKey) dragging = 'C';
-  else if (e.shiftKey) dragging = 'B';
-  else dragging = 'A';
+  dragging = getSelectedDragLayer();
   canvas.classList.add('dragging');
   updateCenter(dragging, pos);
 });
@@ -468,6 +498,25 @@ function endDrag() {
 }
 canvas.addEventListener('mouseup', endDrag);
 canvas.addEventListener('mouseleave', endDrag);
+
+// Touch support
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const pos = getMousePos(touch);
+  dragging = getSelectedDragLayer();
+  canvas.classList.add('dragging');
+  updateCenter(dragging, pos);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!dragging) return;
+  const touch = e.touches[0];
+  updateCenter(dragging, getMousePos(touch));
+}, { passive: false });
+
+canvas.addEventListener('touchend', endDrag);
 
 function updateCenter(layer, pos) {
   if (layer === 'A') { centerA.x = pos.x; centerA.y = pos.y; }
@@ -486,6 +535,10 @@ document.addEventListener('keydown', (e) => {
 Object.values(controls).forEach(el => {
   if (el) el.addEventListener('input', draw);
   if (el && el.type === 'checkbox') el.addEventListener('change', draw);
+});
+
+document.querySelectorAll('input[name="drag-layer"]').forEach(el => {
+  el.addEventListener('change', () => {});
 });
 
 draw();
