@@ -190,6 +190,7 @@
     <input type="range" id="a-min" min="0.5" max="10" step="0.5" value="2">
     <label style="margin-top:10px">Color</label>
     <div class="color-row"><input type="color" id="a-color" value="#e85d04"></div>
+    <label class="layer-toggle" style="margin-top:6px"><input type="checkbox" id="a-cycle"> Color Cycle</label>
     <div class="center-info" id="a-center-info">—</div>
   </div>
 
@@ -205,6 +206,7 @@
     <input type="range" id="b-min" min="0.5" max="10" step="0.5" value="1.5">
     <label style="margin-top:10px">Color</label>
     <div class="color-row"><input type="color" id="b-color" value="#ff4d4d"></div>
+    <label class="layer-toggle" style="margin-top:6px"><input type="checkbox" id="b-cycle"> Color Cycle</label>
     <div class="center-info" id="b-center-info">—</div>
   </div>
 
@@ -220,18 +222,25 @@
     <input type="range" id="c-min" min="0.5" max="10" step="0.5" value="1">
     <label style="margin-top:10px">Color</label>
     <div class="color-row"><input type="color" id="c-color" value="#4a6fa5"></div>
+    <label class="layer-toggle" style="margin-top:6px"><input type="checkbox" id="c-cycle"> Color Cycle</label>
     <div class="center-info" id="c-center-info">—</div>
   </div>
 
   <div class="section">
     <h2>Interference</h2>
-    <label>Mode</label>
-    <select id="mode">
+    <label>Layer B Mode</label>
+    <select id="mode-b">
       <option value="overlay">Overlay</option>
       <option value="difference">Difference</option>
       <option value="multiply">Multiply</option>
       <option value="screen">Screen</option>
-      
+    </select>
+    <label>Layer C Mode</label>
+    <select id="mode-c">
+      <option value="overlay">Overlay</option>
+      <option value="difference">Difference</option>
+      <option value="multiply">Multiply</option>
+      <option value="screen">Screen</option>
     </select>
     <label>Layer B Opacity <span class="value" id="v-op-b">0.7</span></label>
     <input type="range" id="op-b" min="0" max="1" step="0.01" value="0.7">
@@ -308,7 +317,11 @@ const controls = {
   cFalloff: document.getElementById('c-falloff'),
   cMin: document.getElementById('c-min'),
   cColor: document.getElementById('c-color'),
-  mode: document.getElementById('mode'),
+  modeB: document.getElementById('mode-b'),
+  modeC: document.getElementById('mode-c'),
+  aCycle: document.getElementById('a-cycle'),
+  bCycle: document.getElementById('b-cycle'),
+  cCycle: document.getElementById('c-cycle'),
   opB: document.getElementById('op-b'),
   opC: document.getElementById('op-c'),
   speed: document.getElementById('speed'),
@@ -537,26 +550,31 @@ function draw() {
   const cC = getAnimatedCenter(centerC, 4.2);
 
   if (controls.aOn.checked) {
-    drawField(cA.x, cA.y, +controls.aDensity.value, +controls.aSize.value, +controls.aFalloff.value, +controls.aMin.value, shiftColor(controls.aColor.value, hueShift), w, h, shape, phiStrength, audioMod);
+    const shiftA = controls.aCycle.checked ? hueShift : 0;
+    drawField(cA.x, cA.y, +controls.aDensity.value, +controls.aSize.value, +controls.aFalloff.value, +controls.aMin.value, shiftColor(controls.aColor.value, shiftA), w, h, shape, phiStrength, audioMod);
   }
 
   if (controls.bOn.checked) {
     ctx.save();
     ctx.globalAlpha = +controls.opB.value;
-    const mode = controls.mode.value;
-    if (mode !== 'overlay') {
-      ctx.globalCompositeOperation = mode === 'difference' ? 'difference' : mode === 'multiply' ? 'multiply' : mode === 'screen' ? 'screen' : 'source-over';
+    const modeB = controls.modeB.value;
+    if (modeB !== 'overlay') {
+      ctx.globalCompositeOperation = modeB === 'difference' ? 'difference' : modeB === 'multiply' ? 'multiply' : modeB === 'screen' ? 'screen' : 'source-over';
     }
-    drawField(cB.x, cB.y, +controls.bDensity.value, +controls.bSize.value, +controls.bFalloff.value, +controls.bMin.value, shiftColor(controls.bColor.value, hueShift), w, h, shape, phiStrength, audioMod);
+    const shiftB = controls.bCycle.checked ? hueShift : 0;
+    drawField(cB.x, cB.y, +controls.bDensity.value, +controls.bSize.value, +controls.bFalloff.value, +controls.bMin.value, shiftColor(controls.bColor.value, shiftB), w, h, shape, phiStrength, audioMod);
     ctx.restore();
   }
 
   if (controls.cOn.checked) {
     ctx.save();
     ctx.globalAlpha = +controls.opC.value;
-    const mode = controls.mode.value;
-    if (mode !== 'overlay') ctx.globalCompositeOperation = mode === 'difference' ? 'difference' : mode === 'multiply' ? 'multiply' : mode === 'screen' ? 'screen' : 'source-over';
-    drawField(cC.x, cC.y, +controls.cDensity.value, +controls.cSize.value, +controls.cFalloff.value, +controls.cMin.value, shiftColor(controls.cColor.value, hueShift), w, h, shape, phiStrength, audioMod);
+    const modeC = controls.modeC.value;
+    if (modeC !== 'overlay') {
+      ctx.globalCompositeOperation = modeC === 'difference' ? 'difference' : modeC === 'multiply' ? 'multiply' : modeC === 'screen' ? 'screen' : 'source-over';
+    }
+    const shiftC = controls.cCycle.checked ? hueShift : 0;
+    drawField(cC.x, cC.y, +controls.cDensity.value, +controls.cSize.value, +controls.cFalloff.value, +controls.cMin.value, shiftColor(controls.cColor.value, shiftC), w, h, shape, phiStrength, audioMod);
     ctx.restore();
   }
 
