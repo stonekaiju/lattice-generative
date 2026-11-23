@@ -150,29 +150,43 @@ function startRecording() {
     alert('Play the media first, then record.');
     return;
   }
-  recCanvas.width = video.videoWidth || 1280;
-  recCanvas.height = video.videoHeight || 720;
+  const w = video.videoWidth || 1280;
+  const h = video.videoHeight || 720;
+  recCanvas.width = w;
+  recCanvas.height = h;
   recordedChunks = [];
   const stream = recCanvas.captureStream(30);
-  // Try to include audio if available
-  if (mediaElement.captureStream) {
-    try {
-      const audioStream = mediaElement.captureStream();
-      audioStream.getAudioTracks().forEach(t => stream.addTrack(t));
-    } catch (e) {}
+  try {
+    if (mediaElement.captureStream) {
+      const aStream = mediaElement.captureStream();
+      aStream.getAudioTracks().forEach(t => stream.addTrack(t));
+    }
+  } catch (e) { console.warn('No audio track', e); }
+  const options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 2500000 };
+  try {
+    mediaRecorder = new MediaRecorder(stream, options);
+  } catch (e) {
+    mediaRecorder = new MediaRecorder(stream);
   }
-  mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-  mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
+  mediaRecorder.ondataavailable = e => {
+    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+  };
   mediaRecorder.onstop = () => {
+    if (recordedChunks.length === 0) {
+      document.getElementById('rec-status').textContent = 'No data recorded';
+      return;
+    }
     const blob = new Blob(recordedChunks, { type: 'video/webm' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'reactive-video.webm';
+    document.body.appendChild(a);
     a.click();
-    document.getElementById('rec-status').textContent = 'Saved reactive-video.webm';
+    document.body.removeChild(a);
+    document.getElementById('rec-status').textContent = 'Saved (' + Math.round(blob.size/1024) + ' KB)';
   };
-  mediaRecorder.start();
+  mediaRecorder.start(100); // timeslice so data is flushed
   isRecording = true;
   document.getElementById('record-btn').textContent = 'Stop Recording';
   document.getElementById('rec-status').textContent = 'Recording…';
@@ -206,11 +220,14 @@ function loop() {
   const sy = (Math.random() - 0.5) * shakeAmt;
   video.style.transform = `scale(${currentScale.toFixed(3)}) translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
   if (isRecording && video.readyState >= 2) {
+    recCtx.fillStyle = '#000';
+    recCtx.fillRect(0, 0, recCanvas.width, recCanvas.height);
     recCtx.save();
-    recCtx.clearRect(0, 0, recCanvas.width, recCanvas.height);
-    recCtx.translate(recCanvas.width/2 + sx, recCanvas.height/2 + sy);
+    recCtx.translate(recCanvas.width / 2 + sx, recCanvas.height / 2 + sy);
     recCtx.scale(currentScale, currentScale);
-    recCtx.drawImage(video, -video.videoWidth/2, -video.videoHeight/2);
+    const vw = video.videoWidth || recCanvas.width;
+    const vh = video.videoHeight || recCanvas.height;
+    recCtx.drawImage(video, -vw / 2, -vh / 2, vw, vh);
     recCtx.restore();
   }
   updateLabels();
