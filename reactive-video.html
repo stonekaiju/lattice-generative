@@ -277,22 +277,25 @@ function loop() {
   if (!isPlaying) return;
   updateAudio();
   const sens = +controls.sens.value;
-  const energy = Math.max(bass, mid * 0.7) * sens;
+  const energy = Math.max(bass * 1.2, mid * 0.8) * sens;
   const expandAmt = +controls.expand.value;
-  // Detect a rising hit
-  const hit = energy > lastEnergy + 0.04 && energy > 0.15;
-  lastEnergy = energy * 0.85 + lastEnergy * 0.15;
+  const shakeStrength = +controls.shake.value;
+  // Rising edge = hit
+  const hit = energy > lastEnergy + 0.06 && energy > 0.18;
+  lastEnergy = energy * 0.7 + lastEnergy * 0.3;
   let targetScale = 1;
-  if (hit || energy > 0.35) {
-    // Snap toward full expansion on the hit
-    targetScale = 1 + energy * expandAmt * 0.55;
+  if (hit) {
+    // Hard snap on the beat
+    targetScale = 1 + Math.min(1, energy) * expandAmt * 0.7;
+  } else if (energy > 0.4) {
+    targetScale = 1 + energy * expandAmt * 0.35;
   }
-  // Fast attack, quicker release
-  const ease = hit ? 0.65 : 0.22;
+  // Very fast attack on hit, fast release otherwise
+  const ease = hit ? 0.85 : 0.35;
   currentScale += (targetScale - currentScale) * ease;
-  // Clamp so it can return close to 1
-  if (currentScale < 1.01) currentScale = 1;
-  const shakeAmt = energy * +controls.shake.value * 14;
+  if (currentScale < 1.005) currentScale = 1;
+  // Shake only when energy is present
+  const shakeAmt = energy * shakeStrength * 18;
   const sx = (Math.random() - 0.5) * shakeAmt;
   const sy = (Math.random() - 0.5) * shakeAmt;
   video.style.transform = `scale(${currentScale.toFixed(3)}) translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
