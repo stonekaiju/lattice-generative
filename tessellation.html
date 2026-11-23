@@ -167,6 +167,8 @@
       <option value="miura">Miura</option>
       <option value="quad">Quad</option>
       <option value="triangle">Triangle Grid</option>
+      <option value="sierpinski-tri">Sierpinski Triangle</option>
+      <option value="sierpinski-sq">Sierpinski Square</option>
     </select>
     <label class="layer-toggle" style="margin-top:8px"><input type="checkbox" id="fill-cells" checked> Checker Fill</label>
     <label>Golden Influence <span class="value" id="v-phi">0.65</span></label>
@@ -516,6 +518,31 @@ function drawShape(x, y, size, shape, color, cellIndex) {
     ctx.lineTo(x + h * 0.866, y + h * 0.5);
     ctx.closePath();
     ctx.moveTo(x, y - h); ctx.lineTo(x, y + h * 0.5);
+  } else if (shape === 'sierpinski-tri') {
+    // Simple Sierpinski triangle (2 levels)
+    const drawTri = (cx, cy, rad, depth) => {
+      if (depth <= 0) {
+        ctx.moveTo(cx, cy - rad);
+        ctx.lineTo(cx - rad * 0.866, cy + rad * 0.5);
+        ctx.lineTo(cx + rad * 0.866, cy + rad * 0.5);
+        ctx.closePath();
+        return;
+      }
+      const nr = rad * 0.5;
+      drawTri(cx, cy - nr, nr, depth - 1);
+      drawTri(cx - nr * 0.866, cy + nr * 0.5, nr, depth - 1);
+      drawTri(cx + nr * 0.866, cy + nr * 0.5, nr, depth - 1);
+    };
+    drawTri(x, y, h, 2);
+  } else if (shape === 'sierpinski-sq') {
+    // Simple Sierpinski carpet style (cross removed)
+    ctx.rect(x - h, y - h, s, s);
+    const third = s / 3;
+    ctx.rect(x - third/2, y - third/2, third, third); // center hole suggestion
+    ctx.moveTo(x - h, y - h/3); ctx.lineTo(x + h, y - h/3);
+    ctx.moveTo(x - h, y + h/3); ctx.lineTo(x + h, y + h/3);
+    ctx.moveTo(x - h/3, y - h); ctx.lineTo(x - h/3, y + h);
+    ctx.moveTo(x + h/3, y - h); ctx.lineTo(x + h/3, y + h);
   }
   ctx.stroke();
 }
