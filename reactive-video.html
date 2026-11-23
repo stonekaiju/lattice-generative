@@ -1,1 +1,252 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Audio Reactive Video</title>
+<style>
+  :root { --bg:#0f0f0f; --panel:#1a1a1a; --text:#e8e8e8; --muted:#888; --accent:#e85d04; --border:#2a2a2a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,sans-serif; display:flex; height:100vh; overflow:hidden; }
+  #sidebar { width:320px; background:var(--panel); border-right:1px solid var(--border); padding:18px; overflow-y:auto; flex-shrink:0; }
+  h1 { margin:0 0 4px 0; font-size:16px; }
+  .sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
+  .section { margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+  .section h2 { margin:0 0 8px 0; font-size:12px; text-transform:uppercase; color:var(--muted); }
+  label { display:flex; justify-content:space-between; margin:8px 0 3px 0; font-size:13px; }
+  input[type="range"] { width:100%; accent-color:var(--accent); }
+  .value { font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; }
+  button { width:100%; margin-top:6px; padding:8px; background:#252525; color:white; border:1px solid #333; border-radius:5px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); }
+  input[type="file"] { font-size:12px; margin-top:4px; }
+  #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#000; position:relative; overflow:hidden; }
+  video { max-width:100%; max-height:100%; transition: transform 0.05s linear; }
+  .hint { font-size:11px; color:var(--muted); margin-top:8px; line-height:1.4; }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <h1>Audio Reactive Video</h1>
+  <div class="sub">Expand & shake with the music</div>
+  <div class="section">
+    <h2>Media</h2>
+    <label>Load audio or video</label>
+    <input type="file" id="media-file" accept="audio/*,video/*">
+    <button id="play-btn" onclick="togglePlayback()" disabled>Play</button>
+    <button id="record-btn" onclick="toggleRecord()" disabled>Record</button>
+    <div id="rec-status" style="font-size:12px;color:#888;margin-top:6px;"></div>
+  </div>
+  <div class="section">
+    <h2>FX</h2>
+    <label>Expand Strength <span class="value" id="v-expand">0.8</span></label>
+    <input type="range" id="expand" min="0" max="1.5" step="0.05" value="0.8">
+    <label>Shake Strength <span class="value" id="v-shake">0.6</span></label>
+    <input type="range" id="shake" min="0" max="2" step="0.05" value="0.6">
+    <label>Audio Sensitivity <span class="value" id="v-sens">1.0</span></label>
+    <input type="range" id="sens" min="0.2" max="2" step="0.05" value="1.0">
+  </div>
+  <div class="hint">Load a video (or audio + video). Bass drives expand, hits drive shake. Works with Suno videos too.</div>
+</div>
+<div id="stage">
+  <video id="vid" loop playsinline style="display:none"></video>
+  <canvas id="rec-canvas" style="display:none"></canvas>
+</div>
+<script>
+const video = document.getElementById('vid');
+const stage = document.getElementById('stage');
+let audioContext, analyser, dataArray, source, mediaElement;
+let isPlaying = false;
+let bass = 0, mid = 0, treble = 0;
+const controls = {
+  expand: document.getElementById('expand'),
+  shake: document.getElementById('shake'),
+  sens: document.getElementById('sens')
+};
+function updateLabels() {
+  document.getElementById('v-expand').textContent = parseFloat(controls.expand.value).toFixed(2);
+  document.getElementById('v-shake').textContent = parseFloat(controls.shake.value).toFixed(2);
+  document.getElementById('v-sens').textContent = parseFloat(controls.sens.value).toFixed(2);
+}
+function setupAudio() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+  }
+}
+document.getElementById('media-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setupAudio();
+  if (mediaElement) {
+    mediaElement.pause();
+    if (mediaElement !== video) mediaElement.remove();
+  }
+  const url = URL.createObjectURL(file);
+  const isVideo = file.type.startsWith('video/');
+  if (isVideo) {
+    video.src = url;
+    video.style.display = 'block';
+    mediaElement = video;
+  } else {
+    mediaElement = new Audio();
+    mediaElement.src = url;
+    video.style.display = 'none';
+  }
+  mediaElement.loop = true;
+  mediaElement.crossOrigin = 'anonymous';
+  try {
+    source = audioContext.createMediaElementSource(mediaElement);
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+  } catch (err) {
+    console.warn('Audio source already connected or failed', err);
+  }
+  document.getElementById('play-btn').disabled = false;
+  document.getElementById('record-btn').disabled = false;
+  document.getElementById('play-btn').textContent = 'Play';
+});
+function togglePlayback() {
+  if (!mediaElement) return;
+  if (isPlaying) {
+    mediaElement.pause();
+    isPlaying = false;
+    document.getElementById('play-btn').textContent = 'Play';
+  } else {
+    audioContext.resume();
+    mediaElement.play().then(() => {
+      isPlaying = true;
+      document.getElementById('play-btn').textContent = 'Pause';
+      requestAnimationFrame(loop);
+    }).catch(err => console.warn('Play failed', err));
+  }
+}
+function updateAudio() {
+  if (!analyser) return;
+  analyser.getByteFrequencyData(dataArray);
+  const len = dataArray.length;
+  let b=0, m=0, t=0;
+  for (let i=0; i<len*0.15; i++) b += dataArray[i];
+  for (let i=Math.floor(len*0.15); i<len*0.5; i++) m += dataArray[i];
+  for (let i=Math.floor(len*0.5); i<len; i++) t += dataArray[i];
+  bass = (b / (len*0.15*255)) || 0;
+  mid = (m / (len*0.35*255)) || 0;
+  treble = (t / (len*0.5*255)) || 0;
+}
+
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+const recCanvas = document.getElementById('rec-canvas');
+const recCtx = recCanvas.getContext('2d');
+
+function toggleRecord() {
+  if (!isRecording) startRecording();
+  else stopRecording();
+}
+
+function startRecording() {
+  if (!mediaElement || !isPlaying) {
+    alert('Play the media first, then record.');
+    return;
+  }
+  recCanvas.width = video.videoWidth || 1280;
+  recCanvas.height = video.videoHeight || 720;
+  recordedChunks = [];
+  const stream = recCanvas.captureStream(30);
+  // Try to include audio if available
+  if (mediaElement.captureStream) {
+    try {
+      const audioStream = mediaElement.captureStream();
+      audioStream.getAudioTracks().forEach(t => stream.addTrack(t));
+    } catch (e) {}
+  }
+  mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+  mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'reactive-video.webm';
+    a.click();
+    document.getElementById('rec-status').textContent = 'Saved reactive-video.webm';
+  };
+  mediaRecorder.start();
+  isRecording = true;
+  document.getElementById('record-btn').textContent = 'Stop Recording';
+  document.getElementById('rec-status').textContent = 'Recording…';
+}
+
+function stopRecording() {
+  if (mediaRecorder && isRecording) {
+    mediaRecorder.stop();
+    isRecording = false;
+    document.getElementById('record-btn').textContent = 'Record';
+  }
+}
+
+// Draw reactive frame to canvas while recording
+const origLoop = loop;
+function loop() {
+  if (!isPlaying) return;
+  updateAudio();
+  const sens = +controls.sens.value;
+  const energy = Math.max(bass, mid * 0.7) * sens;
+  const expandAmt = +controls.expand.value;
+  const hit = energy > lastEnergy + 0.04 && energy > 0.15;
+  lastEnergy = energy * 0.85 + lastEnergy * 0.15;
+  let targetScale = 1;
+  if (hit || energy > 0.35) targetScale = 1 + energy * expandAmt * 0.55;
+  const ease = hit ? 0.65 : 0.22;
+  currentScale += (targetScale - currentScale) * ease;
+  if (currentScale < 1.01) currentScale = 1;
+  const shakeAmt = energy * +controls.shake.value * 14;
+  const sx = (Math.random() - 0.5) * shakeAmt;
+  const sy = (Math.random() - 0.5) * shakeAmt;
+  video.style.transform = `scale(${currentScale.toFixed(3)}) translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
+  if (isRecording && video.readyState >= 2) {
+    recCtx.save();
+    recCtx.clearRect(0, 0, recCanvas.width, recCanvas.height);
+    recCtx.translate(recCanvas.width/2 + sx, recCanvas.height/2 + sy);
+    recCtx.scale(currentScale, currentScale);
+    recCtx.drawImage(video, -video.videoWidth/2, -video.videoHeight/2);
+    recCtx.restore();
+  }
+  updateLabels();
+  requestAnimationFrame(loop);
+}
+
+let currentScale = 1;
+let lastEnergy = 0;
+function loop() {
+  if (!isPlaying) return;
+  updateAudio();
+  const sens = +controls.sens.value;
+  const energy = Math.max(bass, mid * 0.7) * sens;
+  const expandAmt = +controls.expand.value;
+  // Detect a rising hit
+  const hit = energy > lastEnergy + 0.04 && energy > 0.15;
+  lastEnergy = energy * 0.85 + lastEnergy * 0.15;
+  let targetScale = 1;
+  if (hit || energy > 0.35) {
+    // Snap toward full expansion on the hit
+    targetScale = 1 + energy * expandAmt * 0.55;
+  }
+  // Fast attack, quicker release
+  const ease = hit ? 0.65 : 0.22;
+  currentScale += (targetScale - currentScale) * ease;
+  // Clamp so it can return close to 1
+  if (currentScale < 1.01) currentScale = 1;
+  const shakeAmt = energy * +controls.shake.value * 14;
+  const sx = (Math.random() - 0.5) * shakeAmt;
+  const sy = (Math.random() - 0.5) * shakeAmt;
+  video.style.transform = `scale(${currentScale.toFixed(3)}) translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
+  updateLabels();
+  requestAnimationFrame(loop);
+}
+Object.values(controls).forEach(el => el.addEventListener('input', updateLabels));
+updateLabels();
+</script>
+</body>
+</html>
