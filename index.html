@@ -172,6 +172,8 @@
     <input type="range" id="phi" min="0" max="1" step="0.01" value="0.65">
     <label>Color Cycle Speed <span class="value" id="v-cycle">0</span></label>
     <input type="range" id="cycle-speed" min="0" max="2" step="0.05" value="0">
+    <label>Glow Strength <span class="value" id="v-glow">0</span></label>
+    <input type="range" id="glow" min="0" max="30" step="1" value="0">
     <label>Background</label>
     <div class="color-row">
       <input type="color" id="bg" value="#0a0a0a">
@@ -234,6 +236,9 @@
       <option value="difference">Difference</option>
       <option value="multiply">Multiply</option>
       <option value="screen">Screen</option>
+      <option value="soft-light">Soft Light</option>
+      <option value="color-dodge">Color Dodge</option>
+      <option value="color-burn">Color Burn</option>
     </select>
     <label>Layer C Mode</label>
     <select id="mode-c">
@@ -241,6 +246,9 @@
       <option value="difference">Difference</option>
       <option value="multiply">Multiply</option>
       <option value="screen">Screen</option>
+      <option value="soft-light">Soft Light</option>
+      <option value="color-dodge">Color Dodge</option>
+      <option value="color-burn">Color Burn</option>
     </select>
     <label>Layer B Opacity <span class="value" id="v-op-b">0.7</span></label>
     <input type="range" id="op-b" min="0" max="1" step="0.01" value="0.7">
@@ -327,7 +335,8 @@ const controls = {
   speed: document.getElementById('speed'),
   orbit: document.getElementById('orbit'),
   audioStrength: document.getElementById('audio-strength'),
-  cycleSpeed: document.getElementById('cycle-speed')
+  cycleSpeed: document.getElementById('cycle-speed'),
+  glow: document.getElementById('glow')
 };
 
 function getSelectedDragLayer() {
@@ -354,6 +363,7 @@ function updateLabels() {
   document.getElementById('v-speed').textContent = parseFloat(controls.speed.value).toFixed(2);
   document.getElementById('v-orbit').textContent = parseFloat(controls.orbit.value).toFixed(2);
   document.getElementById('v-cycle').textContent = parseFloat(controls.cycleSpeed.value).toFixed(2);
+  document.getElementById('v-glow').textContent = controls.glow.value;
   document.getElementById('v-audio-str').textContent = parseFloat(controls.audioStrength.value).toFixed(2);
   document.getElementById('a-center-info').textContent = `A: ${(centerA.x*100).toFixed(0)}%, ${(centerA.y*100).toFixed(0)}%`;
   document.getElementById('b-center-info').textContent = `B: ${(centerB.x*100).toFixed(0)}%, ${(centerB.y*100).toFixed(0)}%`;
@@ -457,6 +467,11 @@ function shiftColor(hex, hueShift) {
 }
 
 function drawShape(x, y, size, shape, color) {
+  const glow = +controls.glow.value;
+  if (glow > 0) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = glow;
+  }
   ctx.fillStyle = color;
   ctx.beginPath();
   if (shape === 'circle') {
@@ -484,6 +499,10 @@ function drawShape(x, y, size, shape, color) {
     ctx.closePath();
   }
   ctx.fill();
+  if (+controls.glow.value > 0) {
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+  }
 }
 
 function drawField(cx, cy, density, baseSize, falloff, minSize, color, w, h, shape, phiStrength, audioMod) {
@@ -559,7 +578,7 @@ function draw() {
     ctx.globalAlpha = +controls.opB.value;
     const modeB = controls.modeB.value;
     if (modeB !== 'overlay') {
-      ctx.globalCompositeOperation = modeB === 'difference' ? 'difference' : modeB === 'multiply' ? 'multiply' : modeB === 'screen' ? 'screen' : 'source-over';
+      ctx.globalCompositeOperation = modeB;
     }
     const shiftB = controls.bCycle.checked ? hueShift : 0;
     drawField(cB.x, cB.y, +controls.bDensity.value, +controls.bSize.value, +controls.bFalloff.value, +controls.bMin.value, shiftColor(controls.bColor.value, shiftB), w, h, shape, phiStrength, audioMod);
@@ -571,7 +590,7 @@ function draw() {
     ctx.globalAlpha = +controls.opC.value;
     const modeC = controls.modeC.value;
     if (modeC !== 'overlay') {
-      ctx.globalCompositeOperation = modeC === 'difference' ? 'difference' : modeC === 'multiply' ? 'multiply' : modeC === 'screen' ? 'screen' : 'source-over';
+      ctx.globalCompositeOperation = modeC;
     }
     const shiftC = controls.cCycle.checked ? hueShift : 0;
     drawField(cC.x, cC.y, +controls.cDensity.value, +controls.cSize.value, +controls.cFalloff.value, +controls.cMin.value, shiftColor(controls.cColor.value, shiftC), w, h, shape, phiStrength, audioMod);
