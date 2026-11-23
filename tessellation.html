@@ -163,14 +163,12 @@
     <h2>Global</h2>
     <label>Pattern</label>
     <select id="shape">
-      <option value="circle">Circles</option>
-      <option value="square">Squares</option>
-      <option value="hex">Hexagons</option>
-      <option value="organic">Organic</option>
       <option value="waterbomb">Waterbomb</option>
       <option value="miura">Miura</option>
       <option value="quad">Quad</option>
+      <option value="triangle">Triangle Grid</option>
     </select>
+    <label class="layer-toggle" style="margin-top:8px"><input type="checkbox" id="fill-cells" checked> Checker Fill</label>
     <label>Golden Influence <span class="value" id="v-phi">0.65</span></label>
     <input type="range" id="phi" min="0" max="1" step="0.01" value="0.65">
     <label>Color Cycle Speed <span class="value" id="v-cycle">0</span></label>
@@ -336,7 +334,8 @@ const controls = {
   speed: document.getElementById('speed'),
   orbit: document.getElementById('orbit'),
   audioStrength: document.getElementById('audio-strength'),
-  cycleSpeed: document.getElementById('cycle-speed')
+  cycleSpeed: document.getElementById('cycle-speed'),
+  fillCells: document.getElementById('fill-cells')
 };
 
 function getSelectedDragLayer() {
@@ -465,69 +464,59 @@ function shiftColor(hex, hueShift) {
   return '#' + [nr, ng, nb].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
-function drawShape(x, y, size, shape, color) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(0.6, size * 0.06);
-  ctx.lineCap = 'round';
-
-  if (shape === 'circle' || shape === 'square' || shape === 'hex' || shape === 'organic') {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    if (shape === 'circle') {
-      ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
-    } else if (shape === 'square') {
-      ctx.rect(x - size * 0.4, y - size * 0.4, size * 0.8, size * 0.8);
-    } else if (shape === 'hex') {
-      const r = size * 0.48;
-      for (let i = 0; i < 6; i++) {
-        const ang = (Math.PI / 3) * i - Math.PI / 6;
-        const px = x + r * Math.cos(ang);
-        const py = y + r * Math.sin(ang);
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-    } else if (shape === 'organic') {
-      const r = size * 0.5;
-      ctx.moveTo(x + r, y);
-      for (let i = 1; i <= 8; i++) {
-        const ang = (Math.PI * 2 / 8) * i;
-        const rr = r * (0.75 + 0.25 * Math.sin(ang * 3 + x * 0.01));
-        ctx.lineTo(x + rr * Math.cos(ang), y + rr * Math.sin(ang));
-      }
-      ctx.closePath();
-    }
-    ctx.fill();
-    return;
-  }
-
-  // Origami crease patterns (line work)
-  const s = size * 0.9;
+function drawShape(x, y, size, shape, color, cellIndex) {
+  const s = size * 0.92;
   const h = s / 2;
-  ctx.beginPath();
+  const fill = controls.fillCells && controls.fillCells.checked && (cellIndex % 2 === 0);
 
-  if (shape === 'waterbomb') {
-    // Repeating X / diamond creases
-    ctx.moveTo(x - h, y - h); ctx.lineTo(x + h, y + h);
-    ctx.moveTo(x + h, y - h); ctx.lineTo(x - h, y + h);
-    ctx.moveTo(x, y - h); ctx.lineTo(x, y + h);
-    ctx.moveTo(x - h, y); ctx.lineTo(x + h, y);
-  } else if (shape === 'miura') {
-    // Zigzag parallelogram style
-    ctx.moveTo(x - h, y - h * 0.6); ctx.lineTo(x, y - h);
-    ctx.lineTo(x + h, y - h * 0.6);
-    ctx.moveTo(x - h, y + h * 0.6); ctx.lineTo(x, y + h);
-    ctx.lineTo(x + h, y + h * 0.6);
-    ctx.moveTo(x - h * 0.5, y - h); ctx.lineTo(x - h * 0.5, y + h);
-    ctx.moveTo(x + h * 0.5, y - h); ctx.lineTo(x + h * 0.5, y + h);
-  } else if (shape === 'quad') {
-    // Simple cross + diagonals
-    ctx.moveTo(x - h, y); ctx.lineTo(x + h, y);
-    ctx.moveTo(x, y - h); ctx.lineTo(x, y + h);
-    ctx.moveTo(x - h, y - h); ctx.lineTo(x + h, y + h);
-    ctx.moveTo(x + h, y - h); ctx.lineTo(x - h, y + h);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(0.5, size * 0.045);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (fill) {
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    if (shape === 'triangle') {
+      ctx.moveTo(x, y - h);
+      ctx.lineTo(x - h * 0.866, y + h * 0.5);
+      ctx.lineTo(x + h * 0.866, y + h * 0.5);
+    } else {
+      ctx.rect(x - h, y - h, s, s);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
+  ctx.beginPath();
+  if (shape === 'waterbomb') {
+    // Diamond / X creases
+    ctx.moveTo(x - h, y); ctx.lineTo(x, y - h); ctx.lineTo(x + h, y); ctx.lineTo(x, y + h); ctx.closePath();
+    ctx.moveTo(x - h, y); ctx.lineTo(x + h, y);
+    ctx.moveTo(x, y - h); ctx.lineTo(x, y + h);
+  } else if (shape === 'miura') {
+    // Zigzag parallelogram
+    ctx.moveTo(x - h, y - h * 0.4); ctx.lineTo(x - h * 0.2, y - h);
+    ctx.lineTo(x + h * 0.6, y - h * 0.4); ctx.lineTo(x + h, y);
+    ctx.moveTo(x - h, y + h * 0.4); ctx.lineTo(x - h * 0.2, y + h);
+    ctx.lineTo(x + h * 0.6, y + h * 0.4); ctx.lineTo(x + h, y);
+    ctx.moveTo(x - h * 0.3, y - h); ctx.lineTo(x - h * 0.3, y + h);
+  } else if (shape === 'quad') {
+    // Cross + diagonals
+    ctx.moveTo(x - h, y); ctx.lineTo(x + h, y);
+    ctx.moveTo(x, y - h); ctx.lineTo(x, y + h);
+    ctx.moveTo(x - h, y - h); ctx.lineTo(x + h, y + h);
+    ctx.moveTo(x + h, y - h); ctx.lineTo(x - h, y + h);
+  } else if (shape === 'triangle') {
+    // Triangular grid cell
+    ctx.moveTo(x, y - h);
+    ctx.lineTo(x - h * 0.866, y + h * 0.5);
+    ctx.lineTo(x + h * 0.866, y + h * 0.5);
+    ctx.closePath();
+    ctx.moveTo(x, y - h); ctx.lineTo(x, y + h * 0.5);
+  }
   ctx.stroke();
 }
 
@@ -552,7 +541,7 @@ function drawField(cx, cy, density, baseSize, falloff, minSize, color, w, h, sha
       const blended = powerFalloff * (1 - phiStrength * 0.45) + goldenDecay * (phiStrength * 0.45);
       const size = Math.max(minSize, (baseSize + audioMod.size) * blended);
 
-      if (size > 1) drawShape(x, y, size, shape, color);
+      if (size > 1) drawShape(x, y, size, shape, color, r * cols + c);
     }
   }
 }
