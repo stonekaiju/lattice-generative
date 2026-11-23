@@ -7,6 +7,20 @@
   :root { --bg:#0f0f0f; --panel:#1a1a1a; --text:#e8e8e8; --muted:#888; --accent:#e85d04; --border:#2a2a2a; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,sans-serif; display:flex; height:100vh; overflow:hidden; }
+  body.fullscreen #sidebar { display: none; }
+  body.fullscreen #stage {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 9999;
+  }
+  body.fullscreen video {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none;
+    max-height: none;
+    object-fit: contain;
+  }
   #sidebar { width:320px; background:var(--panel); border-right:1px solid var(--border); padding:18px; overflow-y:auto; flex-shrink:0; }
   h1 { margin:0 0 4px 0; font-size:16px; }
   .sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
@@ -19,7 +33,7 @@
   button.primary { background:var(--accent); border-color:var(--accent); }
   input[type="file"] { font-size:12px; margin-top:4px; }
   #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#000; position:relative; overflow:hidden; }
-  video { max-width:100%; max-height:100%; transition: transform 0.05s linear; }
+  video { max-width:100%; max-height:100%; object-fit: contain; transition: transform 0.05s linear; }
   .hint { font-size:11px; color:var(--muted); margin-top:8px; line-height:1.4; }
 </style>
 </head>
@@ -33,6 +47,7 @@
     <input type="file" id="media-file" accept="audio/*,video/*">
     <button id="play-btn" onclick="togglePlayback()" disabled>Play</button>
     <button id="record-btn" onclick="toggleRecord()" disabled>Record</button>
+    <button id="fs-btn" onclick="toggleFullscreen()">Fullscreen</button>
     <div id="rec-status" style="font-size:12px;color:#888;margin-top:6px;"></div>
   </div>
   <div class="section">
@@ -47,6 +62,7 @@
   <div class="hint">Load a video (or audio + video). Bass drives expand, hits drive shake. Works with Suno videos too.</div>
 </div>
 <div id="stage">
+  <button id="exit-fs" onclick="toggleFullscreen()" style="display:none; position:absolute; top:12px; right:12px; z-index:10000; width:auto; padding:8px 14px; background:rgba(0,0,0,0.6); border:1px solid #444;">Exit</button>
   <video id="vid" loop playsinline style="display:none"></video>
   <canvas id="rec-canvas" style="display:none"></canvas>
 </div>
@@ -140,6 +156,27 @@ let isRecording = false;
 const recCanvas = document.getElementById('rec-canvas');
 const recCtx = recCanvas.getContext('2d');
 
+let exitTimeout = null;
+function showExitTemporarily() {
+  const exitBtn = document.getElementById('exit-fs');
+  if (!exitBtn || !document.body.classList.contains('fullscreen')) return;
+  exitBtn.style.display = 'block';
+  clearTimeout(exitTimeout);
+  exitTimeout = setTimeout(() => { exitBtn.style.display = 'none'; }, 2500);
+}
+function toggleFullscreen() {
+  const isFs = document.body.classList.toggle('fullscreen');
+  const exitBtn = document.getElementById('exit-fs');
+  if (isFs) {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    if (exitBtn) exitBtn.style.display = 'none';
+  } else {
+    document.exitFullscreen?.().catch(() => {});
+    if (exitBtn) exitBtn.style.display = 'none';
+  }
+}
+document.getElementById('stage').addEventListener('click', showExitTemporarily);
+document.getElementById('stage').addEventListener('touchstart', showExitTemporarily, {passive: true});
 function toggleRecord() {
   if (!isRecording) startRecording();
   else stopRecording();
