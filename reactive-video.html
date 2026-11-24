@@ -257,7 +257,7 @@ function loop() {
   const shakeAmt = energy * +controls.shake.value * 14;
   const sx = (Math.random() - 0.5) * shakeAmt;
   const sy = (Math.random() - 0.5) * shakeAmt;
-  // Draw to view canvas with edge pixel repeat
+  // Draw to view canvas with true edge pixel extension
   const view = document.getElementById('view-canvas');
   if (video.readyState >= 2 && view) {
     const vw = video.videoWidth || 1280;
@@ -267,13 +267,29 @@ function loop() {
       view.height = vh;
     }
     const vctx = view.getContext('2d');
-    // First fill with a stretched version so edges are never empty
-    vctx.drawImage(video, 0, 0, vw, vh);
-    // Now draw the transformed version on top, centered
+    vctx.clearRect(0, 0, vw, vh);
     vctx.save();
     vctx.translate(vw / 2 + sx, vh / 2 + sy);
     vctx.scale(currentScale, currentScale);
-    vctx.drawImage(video, -vw / 2, -vh / 2, vw, vh);
+    const hw = vw / 2;
+    const hh = vh / 2;
+    // Main image
+    vctx.drawImage(video, -hw, -hh, vw, vh);
+    // Edge strips (1px source stretched)
+    const strip = 80; // how far to extend
+    // Left
+    vctx.drawImage(video, 0, 0, 1, vh, -hw - strip, -hh, strip, vh);
+    // Right
+    vctx.drawImage(video, vw - 1, 0, 1, vh, hw, -hh, strip, vh);
+    // Top
+    vctx.drawImage(video, 0, 0, vw, 1, -hw, -hh - strip, vw, strip);
+    // Bottom
+    vctx.drawImage(video, 0, vh - 1, vw, 1, -hw, hh, vw, strip);
+    // Corners
+    vctx.drawImage(video, 0, 0, 1, 1, -hw - strip, -hh - strip, strip, strip);
+    vctx.drawImage(video, vw - 1, 0, 1, 1, hw, -hh - strip, strip, strip);
+    vctx.drawImage(video, 0, vh - 1, 1, 1, -hw - strip, hh, strip, strip);
+    vctx.drawImage(video, vw - 1, vh - 1, 1, 1, hw, hh, strip, strip);
     vctx.restore();
   }
   if (isRecording && video.readyState >= 2) {
