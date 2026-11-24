@@ -257,21 +257,32 @@ function loop() {
   const shakeAmt = energy * +controls.shake.value * 14;
   const sx = (Math.random() - 0.5) * shakeAmt;
   const sy = (Math.random() - 0.5) * shakeAmt;
-  // Draw to view canvas with edge extension
+  // Draw to view canvas, centered, with edge clamp/repeat
   const view = document.getElementById('view-canvas');
   if (video.readyState >= 2 && view) {
     const vw = video.videoWidth || 1280;
     const vh = video.videoHeight || 720;
-    if (view.width !== vw) { view.width = vw; view.height = vh; }
+    if (view.width !== vw || view.height !== vh) {
+      view.width = vw;
+      view.height = vh;
+    }
     const vctx = view.getContext('2d');
     vctx.fillStyle = '#000';
     vctx.fillRect(0, 0, vw, vh);
     vctx.save();
-    vctx.translate(vw/2 + sx, vh/2 + sy);
+    // Center the transform
+    vctx.translate(vw / 2, vh / 2);
+    vctx.translate(sx, sy);
     vctx.scale(currentScale, currentScale);
-    // Overdraw slightly so edges can be sampled
-    const pad = 40;
-    vctx.drawImage(video, -vw/2 - pad, -vh/2 - pad, vw + pad*2, vh + pad*2);
+    // Draw video centered; slight overscan for edge coverage
+    const overscan = 1.08;
+    vctx.drawImage(
+      video,
+      - (vw * overscan) / 2,
+      - (vh * overscan) / 2,
+      vw * overscan,
+      vh * overscan
+    );
     vctx.restore();
   }
   if (isRecording && video.readyState >= 2) {
