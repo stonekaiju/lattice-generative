@@ -257,7 +257,7 @@ function loop() {
   const shakeAmt = energy * +controls.shake.value * 14;
   const sx = (Math.random() - 0.5) * shakeAmt;
   const sy = (Math.random() - 0.5) * shakeAmt;
-  // Draw to view canvas, centered, with edge clamp/repeat
+  // Draw to view canvas with edge pixel repeat
   const view = document.getElementById('view-canvas');
   if (video.readyState >= 2 && view) {
     const vw = video.videoWidth || 1280;
@@ -267,22 +267,13 @@ function loop() {
       view.height = vh;
     }
     const vctx = view.getContext('2d');
-    vctx.fillStyle = '#000';
-    vctx.fillRect(0, 0, vw, vh);
+    // First fill with a stretched version so edges are never empty
+    vctx.drawImage(video, 0, 0, vw, vh);
+    // Now draw the transformed version on top, centered
     vctx.save();
-    // Center the transform
-    vctx.translate(vw / 2, vh / 2);
-    vctx.translate(sx, sy);
+    vctx.translate(vw / 2 + sx, vh / 2 + sy);
     vctx.scale(currentScale, currentScale);
-    // Draw video centered; slight overscan for edge coverage
-    const overscan = 1.08;
-    vctx.drawImage(
-      video,
-      - (vw * overscan) / 2,
-      - (vh * overscan) / 2,
-      vw * overscan,
-      vh * overscan
-    );
+    vctx.drawImage(video, -vw / 2, -vh / 2, vw, vh);
     vctx.restore();
   }
   if (isRecording && video.readyState >= 2) {
