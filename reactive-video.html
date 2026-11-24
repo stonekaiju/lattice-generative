@@ -257,7 +257,7 @@ function loop() {
   const shakeAmt = energy * +controls.shake.value * 14;
   const sx = (Math.random() - 0.5) * shakeAmt;
   const sy = (Math.random() - 0.5) * shakeAmt;
-  // Draw to view canvas with true edge pixel extension
+  // Centered draw with overscan so edges stay filled
   const view = document.getElementById('view-canvas');
   if (video.readyState >= 2 && view) {
     const vw = video.videoWidth || 1280;
@@ -267,29 +267,15 @@ function loop() {
       view.height = vh;
     }
     const vctx = view.getContext('2d');
-    vctx.clearRect(0, 0, vw, vh);
+    vctx.fillStyle = '#000';
+    vctx.fillRect(0, 0, vw, vh);
     vctx.save();
-    vctx.translate(vw / 2 + sx, vh / 2 + sy);
+    // Strict center + shake offset
+    vctx.translate(vw * 0.5 + sx, vh * 0.5 + sy);
     vctx.scale(currentScale, currentScale);
-    const hw = vw / 2;
-    const hh = vh / 2;
-    // Main image
-    vctx.drawImage(video, -hw, -hh, vw, vh);
-    // Edge strips (1px source stretched)
-    const strip = 80; // how far to extend
-    // Left
-    vctx.drawImage(video, 0, 0, 1, vh, -hw - strip, -hh, strip, vh);
-    // Right
-    vctx.drawImage(video, vw - 1, 0, 1, vh, hw, -hh, strip, vh);
-    // Top
-    vctx.drawImage(video, 0, 0, vw, 1, -hw, -hh - strip, vw, strip);
-    // Bottom
-    vctx.drawImage(video, 0, vh - 1, vw, 1, -hw, hh, vw, strip);
-    // Corners
-    vctx.drawImage(video, 0, 0, 1, 1, -hw - strip, -hh - strip, strip, strip);
-    vctx.drawImage(video, vw - 1, 0, 1, 1, hw, -hh - strip, strip, strip);
-    vctx.drawImage(video, 0, vh - 1, 1, 1, -hw - strip, hh, strip, strip);
-    vctx.drawImage(video, vw - 1, vh - 1, 1, 1, hw, hh, strip, strip);
+    // Draw larger than frame so movement stays covered
+    const scale = 1.15;
+    vctx.drawImage(video, -vw * scale * 0.5, -vh * scale * 0.5, vw * scale, vh * scale);
     vctx.restore();
   }
   if (isRecording && video.readyState >= 2) {
