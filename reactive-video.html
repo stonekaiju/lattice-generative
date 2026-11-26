@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Region Reactive Video</title>
+<title>Temporal Region Reactive</title>
 <style>
   :root { --bg:#0f0f0f; --panel:#1a1a1a; --text:#e8e8e8; --muted:#888; --accent:#e85d04; --border:#2a2a2a; }
   * { box-sizing: border-box; }
@@ -21,58 +21,63 @@
   button.primary { background:var(--accent); border-color:var(--accent); }
   input[type="file"] { font-size:12px; margin-top:4px; }
   #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#000; position:relative; overflow:hidden; }
-  canvas { width:100%; height:100%; object-fit:contain; }
+  video { max-width:100%; max-height:100%; object-fit:contain; }
   .hint { font-size:11px; color:var(--muted); margin-top:8px; line-height:1.4; }
   #exit-fs { display:none; position:absolute; top:12px; right:12px; z-index:10000; width:auto; padding:8px 14px; background:rgba(0,0,0,0.6); border:1px solid #444; }
+  .status { font-size:12px; color:var(--accent); margin-top:6px; }
 </style>
 </head>
 <body>
 <div id="sidebar">
-  <h1>Region Reactive</h1>
-  <div class="sub">Show regions on bass / mid / treble</div>
+  <h1>Temporal Regions</h1>
+  <div class="sub">Jump through the clip on bass / mid / treble</div>
   <div class="section">
     <h2>Media</h2>
     <label>Load video clip</label>
     <input type="file" id="media-file" accept="video/*">
     <button id="play-btn" onclick="togglePlayback()" disabled>Play</button>
     <button onclick="toggleFullscreen()">Fullscreen</button>
+    <div class="status" id="status">Ambient</div>
   </div>
   <div class="section">
-    <h2>Regions</h2>
-    <label>Bass Threshold <span class="value" id="v-bass">0.35</span></label>
-    <input type="range" id="bass-th" min="0.1" max="0.8" step="0.01" value="0.35">
-    <label>Mid Threshold <span class="value" id="v-mid">0.3</span></label>
-    <input type="range" id="mid-th" min="0.1" max="0.8" step="0.01" value="0.3">
-    <label>Treble Threshold <span class="value" id="v-treble">0.25</span></label>
-    <input type="range" id="treble-th" min="0.1" max="0.8" step="0.01" value="0.25">
+    <h2>Triggers</h2>
+    <label>Bass Threshold <span class="value" id="v-bass">0.4</span></label>
+    <input type="range" id="bass-th" min="0.1" max="0.8" step="0.01" value="0.4">
+    <label>Mid Threshold <span class="value" id="v-mid">0.35</span></label>
+    <input type="range" id="mid-th" min="0.1" max="0.8" step="0.01" value="0.35">
+    <label>Treble Threshold <span class="value" id="v-treble">0.3</span></label>
+    <input type="range" id="treble-th" min="0.1" max="0.8" step="0.01" value="0.3">
     <label>Sensitivity <span class="value" id="v-sens">1.0</span></label>
     <input type="range" id="sens" min="0.3" max="2" step="0.05" value="1.0">
+    <label>Hold Time (s) <span class="value" id="v-hold">0.6</span></label>
+    <input type="range" id="hold" min="0.2" max="2" step="0.1" value="0.6">
   </div>
-  <div class="hint">Left = bass, Center = mid, Right = treble.<br>Regions appear when their band is above threshold.<br>Works with short Imagine clips.</div>
+  <div class="hint">Ambient loops the start.<br>Mid jumps to the middle.<br>Bass jumps to the end.<br>Returns to ambient after hold time.</div>
 </div>
 <div id="stage">
   <button id="exit-fs" onclick="toggleFullscreen()">Exit</button>
-  <video id="vid" loop playsinline style="display:none"></video>
-  <canvas id="c"></canvas>
+  <video id="vid" loop playsinline></video>
 </div>
 <script>
 const video = document.getElementById('vid');
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
 let audioContext, analyser, dataArray, source, mediaElement;
 let isPlaying = false;
 let bass = 0, mid = 0, treble = 0;
+let currentMode = 'ambient';
+let holdUntil = 0;
 const controls = {
   bassTh: document.getElementById('bass-th'),
   midTh: document.getElementById('mid-th'),
   trebleTh: document.getElementById('treble-th'),
-  sens: document.getElementById('sens')
+  sens: document.getElementById('sens'),
+  hold: document.getElementById('hold')
 };
 function updateLabels() {
   document.getElementById('v-bass').textContent = parseFloat(controls.bassTh.value).toFixed(2);
   document.getElementById('v-mid').textContent = parseFloat(controls.midTh.value).toFixed(2);
   document.getElementById('v-treble').textContent = parseFloat(controls.trebleTh.value).toFixed(2);
   document.getElementById('v-sens').textContent = parseFloat(controls.sens.value).toFixed(2);
+  document.getElementById('v-hold').textContent = parseFloat(controls.hold.value).toFixed(1);
 }
 function setupAudio() {
   if (!audioContext) {
@@ -89,7 +94,6 @@ document.getElementById('media-file').addEventListener('change', e => {
   if (mediaElement) mediaElement.pause();
   const url = URL.createObjectURL(file);
   video.src = url;
-  video.style.display = 'none';
   mediaElement = video;
   mediaElement.loop = true;
   mediaElement.crossOrigin = 'anonymous';
@@ -127,13 +131,19 @@ function updateAudio() {
   mid = (m / (len*0.35*255)) || 0;
   treble = (t / (len*0.5*255)) || 0;
 }
-function resizeCanvas() {
-  const stage = document.getElementById('stage');
-  canvas.width = stage.clientWidth;
-  canvas.height = stage.clientHeight;
+function setRegion(mode) {
+  if (!video.duration) return;
+  const d = video.duration;
+  if (mode === 'ambient') {
+    if (video.currentTime > d * 0.25) video.currentTime = 0;
+  } else if (mode === 'mid') {
+    video.currentTime = d * 0.35;
+  } else if (mode === 'bass') {
+    video.currentTime = d * 0.7;
+  }
+  currentMode = mode;
+  document.getElementById('status').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
 function loop() {
   if (!isPlaying) return;
   updateAudio();
@@ -141,32 +151,20 @@ function loop() {
   const b = bass * sens;
   const m = mid * sens;
   const t = treble * sens;
-  const showBass = b > +controls.bassTh.value;
-  const showMid = m > +controls.midTh.value;
-  const showTreble = t > +controls.trebleTh.value;
-  if (video.readyState >= 2) {
-    const vw = video.videoWidth || 1280;
-    const vh = video.videoHeight || 720;
-    if (canvas.width !== vw) { canvas.width = vw; canvas.height = vh; }
-    // Fit video to canvas preserving aspect
-    const scale = Math.min(canvas.width / vw, canvas.height / vh);
-    const dw = vw * scale;
-    const dh = vh * scale;
-    const ox = (canvas.width - dw) / 2;
-    const oy = (canvas.height - dh) / 2;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const third = vw / 3;
-    // Draw regions with opacity based on energy
-    const drawRegion = (srcX, active, energy) => {
-      if (!active) return;
-      ctx.globalAlpha = 0.35 + Math.min(0.65, energy * 1.2);
-      ctx.drawImage(video, srcX, 0, third, vh, ox + (srcX / vw) * dw, oy, (third / vw) * dw, dh);
-      ctx.globalAlpha = 1;
-    };
-    drawRegion(0, showBass, b);
-    drawRegion(third, showMid, m);
-    drawRegion(third * 2, showTreble, t);
+  const now = performance.now() / 1000;
+  const hold = +controls.hold.value;
+  let next = currentMode;
+  if (b > +controls.bassTh.value) next = 'bass';
+  else if (m > +controls.midTh.value) next = 'mid';
+  else if (t > +controls.trebleTh.value) next = 'treble';
+  else if (now > holdUntil) next = 'ambient';
+  if (next !== currentMode) {
+    setRegion(next);
+    if (next !== 'ambient') holdUntil = now + hold;
+  }
+  // Keep ambient looping in the first quarter
+  if (currentMode === 'ambient' && video.currentTime > video.duration * 0.28) {
+    video.currentTime = 0;
   }
   updateLabels();
   requestAnimationFrame(loop);
