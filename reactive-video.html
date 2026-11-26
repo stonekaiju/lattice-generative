@@ -50,13 +50,14 @@
     <label>Sensitivity <span class="value" id="v-sens">1.0</span></label>
     <input type="range" id="sens" min="0.3" max="2" step="0.05" value="1.0">
     <label>Hold Time (s) <span class="value" id="v-hold">0.6</span></label>
-    <input type="range" id="hold" min="0.2" max="2" step="0.1" value="0.6">
+    <input type="range" id="hold" min="0.15" max="1.5" step="0.05" value="0.35">
   </div>
   <div class="hint">Ambient loops the start.<br>Mid jumps to the middle.<br>Bass jumps to the end.<br>Returns to ambient after hold time.</div>
 </div>
 <div id="stage">
   <button id="exit-fs" onclick="toggleFullscreen()">Exit</button>
-  <video id="vid" loop playsinline></video>
+  <video id="vid" loop muted playsinline></video>
+  <audio id="aud" loop></audio>
 </div>
 <script>
 const video = document.getElementById('vid');
@@ -94,8 +95,11 @@ document.getElementById('media-file').addEventListener('change', e => {
   if (mediaElement) mediaElement.pause();
   const url = URL.createObjectURL(file);
   video.src = url;
-  mediaElement = video;
-  mediaElement.loop = true;
+  video.muted = true;
+  const audio = document.getElementById('aud');
+  audio.src = url;
+  audio.loop = true;
+  mediaElement = audio;
   mediaElement.crossOrigin = 'anonymous';
   try {
     source = audioContext.createMediaElementSource(mediaElement);
@@ -135,7 +139,7 @@ function setRegion(mode) {
   if (!video.duration) return;
   const d = video.duration;
   if (mode === 'ambient') {
-    if (video.currentTime > d * 0.25) video.currentTime = 0;
+    if (video.currentTime > d * 0.18) video.currentTime = 0;
   } else if (mode === 'mid') {
     video.currentTime = d * 0.35;
   } else if (mode === 'bass') {
@@ -163,7 +167,7 @@ function loop() {
     if (next !== 'ambient') holdUntil = now + hold;
   }
   // Keep ambient looping in the first quarter
-  if (currentMode === 'ambient' && video.currentTime > video.duration * 0.28) {
+  if (currentMode === 'ambient' && video.currentTime > video.duration * 0.2) {
     video.currentTime = 0;
   }
   updateLabels();
