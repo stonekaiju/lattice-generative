@@ -2,25 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Audio Reactive Video</title>
+<title>Region Reactive Video</title>
 <style>
   :root { --bg:#0f0f0f; --panel:#1a1a1a; --text:#e8e8e8; --muted:#888; --accent:#e85d04; --border:#2a2a2a; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,sans-serif; display:flex; height:100vh; overflow:hidden; }
-  body.fullscreen #sidebar { display: none; }
-  body.fullscreen #stage {
-    position: fixed;
-    inset: 0;
-    background: #000;
-    z-index: 9999;
-  }
-  body.fullscreen video {
-    width: 100vw !important;
-    height: 100vh !important;
-    max-width: none;
-    max-height: none;
-    object-fit: contain;
-  }
+  body.fullscreen #sidebar { display:none; }
+  body.fullscreen #stage { position:fixed; inset:0; background:#000; z-index:9999; }
   #sidebar { width:320px; background:var(--panel); border-right:1px solid var(--border); padding:18px; overflow-y:auto; flex-shrink:0; }
   h1 { margin:0 0 4px 0; font-size:16px; }
   .sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
@@ -33,55 +21,57 @@
   button.primary { background:var(--accent); border-color:var(--accent); }
   input[type="file"] { font-size:12px; margin-top:4px; }
   #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#000; position:relative; overflow:hidden; }
-  video { max-width:100%; max-height:100%; object-fit: cover; }
-  #view-canvas { display: none; }
+  canvas { max-width:100%; max-height:100%; }
   .hint { font-size:11px; color:var(--muted); margin-top:8px; line-height:1.4; }
+  #exit-fs { display:none; position:absolute; top:12px; right:12px; z-index:10000; width:auto; padding:8px 14px; background:rgba(0,0,0,0.6); border:1px solid #444; }
 </style>
 </head>
 <body>
 <div id="sidebar">
-  <h1>Audio Reactive Video</h1>
-  <div class="sub">Expand & shake with the music</div>
+  <h1>Region Reactive</h1>
+  <div class="sub">Show regions on bass / mid / treble</div>
   <div class="section">
     <h2>Media</h2>
-    <label>Load audio or video</label>
-    <input type="file" id="media-file" accept="audio/*,video/*">
+    <label>Load video clip</label>
+    <input type="file" id="media-file" accept="video/*">
     <button id="play-btn" onclick="togglePlayback()" disabled>Play</button>
-    <button id="record-btn" onclick="toggleRecord()" disabled>Record</button>
-    <button id="fs-btn" onclick="toggleFullscreen()">Fullscreen</button>
-    <div id="rec-status" style="font-size:12px;color:#888;margin-top:6px;"></div>
+    <button onclick="toggleFullscreen()">Fullscreen</button>
   </div>
   <div class="section">
-    <h2>FX</h2>
-    <label>Expand Strength <span class="value" id="v-expand">0.8</span></label>
-    <input type="range" id="expand" min="0" max="1.5" step="0.05" value="0.8">
-    <label>Shake Strength <span class="value" id="v-shake">0.6</span></label>
-    <input type="range" id="shake" min="0" max="2" step="0.05" value="0.6">
-    <label>Audio Sensitivity <span class="value" id="v-sens">1.0</span></label>
-    <input type="range" id="sens" min="0.2" max="2" step="0.05" value="1.0">
+    <h2>Regions</h2>
+    <label>Bass Threshold <span class="value" id="v-bass">0.35</span></label>
+    <input type="range" id="bass-th" min="0.1" max="0.8" step="0.01" value="0.35">
+    <label>Mid Threshold <span class="value" id="v-mid">0.3</span></label>
+    <input type="range" id="mid-th" min="0.1" max="0.8" step="0.01" value="0.3">
+    <label>Treble Threshold <span class="value" id="v-treble">0.25</span></label>
+    <input type="range" id="treble-th" min="0.1" max="0.8" step="0.01" value="0.25">
+    <label>Sensitivity <span class="value" id="v-sens">1.0</span></label>
+    <input type="range" id="sens" min="0.3" max="2" step="0.05" value="1.0">
   </div>
-  <div class="hint">Load a video (or audio + video). Bass drives expand, hits drive shake. Works with Suno videos too.</div>
+  <div class="hint">Left = bass, Center = mid, Right = treble.<br>Regions appear when their band is above threshold.<br>Works with short Imagine clips.</div>
 </div>
 <div id="stage">
-  <button id="exit-fs" onclick="toggleFullscreen()" style="display:none; position:absolute; top:12px; right:12px; z-index:10000; width:auto; padding:8px 14px; background:rgba(0,0,0,0.6); border:1px solid #444;">Exit</button>
+  <button id="exit-fs" onclick="toggleFullscreen()">Exit</button>
   <video id="vid" loop playsinline style="display:none"></video>
-  <canvas id="view-canvas" style="max-width:100%; max-height:100%;"></canvas>
-  <canvas id="rec-canvas" style="display:none"></canvas>
+  <canvas id="c"></canvas>
 </div>
 <script>
 const video = document.getElementById('vid');
-const stage = document.getElementById('stage');
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
 let audioContext, analyser, dataArray, source, mediaElement;
 let isPlaying = false;
 let bass = 0, mid = 0, treble = 0;
 const controls = {
-  expand: document.getElementById('expand'),
-  shake: document.getElementById('shake'),
+  bassTh: document.getElementById('bass-th'),
+  midTh: document.getElementById('mid-th'),
+  trebleTh: document.getElementById('treble-th'),
   sens: document.getElementById('sens')
 };
 function updateLabels() {
-  document.getElementById('v-expand').textContent = parseFloat(controls.expand.value).toFixed(2);
-  document.getElementById('v-shake').textContent = parseFloat(controls.shake.value).toFixed(2);
+  document.getElementById('v-bass').textContent = parseFloat(controls.bassTh.value).toFixed(2);
+  document.getElementById('v-mid').textContent = parseFloat(controls.midTh.value).toFixed(2);
+  document.getElementById('v-treble').textContent = parseFloat(controls.trebleTh.value).toFixed(2);
   document.getElementById('v-sens').textContent = parseFloat(controls.sens.value).toFixed(2);
 }
 function setupAudio() {
@@ -96,33 +86,19 @@ document.getElementById('media-file').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
   setupAudio();
-  if (mediaElement) {
-    mediaElement.pause();
-    if (mediaElement !== video) mediaElement.remove();
-  }
+  if (mediaElement) mediaElement.pause();
   const url = URL.createObjectURL(file);
-  const isVideo = file.type.startsWith('video/');
-  if (isVideo) {
-    video.src = url;
-    video.style.display = 'block';
-    mediaElement = video;
-  } else {
-    mediaElement = new Audio();
-    mediaElement.src = url;
-    video.style.display = 'none';
-  }
+  video.src = url;
+  video.style.display = 'none';
+  mediaElement = video;
   mediaElement.loop = true;
   mediaElement.crossOrigin = 'anonymous';
   try {
     source = audioContext.createMediaElementSource(mediaElement);
     source.connect(analyser);
     analyser.connect(audioContext.destination);
-  } catch (err) {
-    console.warn('Audio source already connected or failed', err);
-  }
+  } catch (err) {}
   document.getElementById('play-btn').disabled = false;
-  document.getElementById('record-btn').disabled = false;
-  document.getElementById('play-btn').textContent = 'Play';
 });
 function togglePlayback() {
   if (!mediaElement) return;
@@ -136,7 +112,7 @@ function togglePlayback() {
       isPlaying = true;
       document.getElementById('play-btn').textContent = 'Pause';
       requestAnimationFrame(loop);
-    }).catch(err => console.warn('Play failed', err));
+    });
   }
 }
 function updateAudio() {
@@ -151,13 +127,31 @@ function updateAudio() {
   mid = (m / (len*0.35*255)) || 0;
   treble = (t / (len*0.5*255)) || 0;
 }
-
-let mediaRecorder = null;
-let recordedChunks = [];
-let isRecording = false;
-const recCanvas = document.getElementById('rec-canvas');
-const recCtx = recCanvas.getContext('2d');
-
+function loop() {
+  if (!isPlaying) return;
+  updateAudio();
+  const sens = +controls.sens.value;
+  const b = bass * sens;
+  const m = mid * sens;
+  const t = treble * sens;
+  const showBass = b > +controls.bassTh.value;
+  const showMid = m > +controls.midTh.value;
+  const showTreble = t > +controls.trebleTh.value;
+  if (video.readyState >= 2) {
+    const vw = video.videoWidth || 1280;
+    const vh = video.videoHeight || 720;
+    if (canvas.width !== vw) { canvas.width = vw; canvas.height = vh; }
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, vw, vh);
+    const third = vw / 3;
+    // Draw only active regions
+    if (showBass) ctx.drawImage(video, 0, 0, third, vh, 0, 0, third, vh);
+    if (showMid) ctx.drawImage(video, third, 0, third, vh, third, 0, third, vh);
+    if (showTreble) ctx.drawImage(video, third*2, 0, third, vh, third*2, 0, third, vh);
+  }
+  updateLabels();
+  requestAnimationFrame(loop);
+}
 let exitTimeout = null;
 function showExitTemporarily() {
   const exitBtn = document.getElementById('exit-fs');
@@ -179,134 +173,6 @@ function toggleFullscreen() {
 }
 document.getElementById('stage').addEventListener('click', showExitTemporarily);
 document.getElementById('stage').addEventListener('touchstart', showExitTemporarily, {passive: true});
-function toggleRecord() {
-  if (!isRecording) startRecording();
-  else stopRecording();
-}
-
-function startRecording() {
-  if (!mediaElement || !isPlaying) {
-    alert('Play the media first, then record.');
-    return;
-  }
-  const w = video.videoWidth || 1280;
-  const h = video.videoHeight || 720;
-  recCanvas.width = w;
-  recCanvas.height = h;
-  recordedChunks = [];
-  const stream = recCanvas.captureStream(30);
-  try {
-    if (mediaElement.captureStream) {
-      const aStream = mediaElement.captureStream();
-      aStream.getAudioTracks().forEach(t => stream.addTrack(t));
-    }
-  } catch (e) { console.warn('No audio track', e); }
-  const options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 2500000 };
-  try {
-    mediaRecorder = new MediaRecorder(stream, options);
-  } catch (e) {
-    mediaRecorder = new MediaRecorder(stream);
-  }
-  mediaRecorder.ondataavailable = e => {
-    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-  };
-  mediaRecorder.onstop = () => {
-    if (recordedChunks.length === 0) {
-      document.getElementById('rec-status').textContent = 'No data recorded';
-      return;
-    }
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'reactive-video.webm';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    document.getElementById('rec-status').textContent = 'Saved (' + Math.round(blob.size/1024) + ' KB)';
-  };
-  mediaRecorder.start(100); // timeslice so data is flushed
-  isRecording = true;
-  document.getElementById('record-btn').textContent = 'Stop Recording';
-  document.getElementById('rec-status').textContent = 'Recording…';
-}
-
-function stopRecording() {
-  if (mediaRecorder && isRecording) {
-    mediaRecorder.stop();
-    isRecording = false;
-    document.getElementById('record-btn').textContent = 'Record';
-  }
-}
-
-// Draw reactive frame to canvas while recording
-const origLoop = loop;
-function loop() {
-  if (!isPlaying) return;
-  updateAudio();
-  const sens = +controls.sens.value;
-  const energy = Math.max(bass, mid * 0.7) * sens;
-  const expandAmt = +controls.expand.value;
-  const hit = energy > lastEnergy + 0.04 && energy > 0.15;
-  lastEnergy = energy * 0.85 + lastEnergy * 0.15;
-  let targetScale = 1;
-  if (hit || energy > 0.35) targetScale = 1 + energy * expandAmt * 0.55;
-  const ease = hit ? 0.65 : 0.22;
-  currentScale += (targetScale - currentScale) * ease;
-  if (currentScale < 1.01) currentScale = 1;
-  const shakeAmt = energy * +controls.shake.value * 14;
-  const sx = (Math.random() - 0.5) * shakeAmt;
-  const sy = (Math.random() - 0.5) * shakeAmt;
-  // Simple video element transform with modest overscale to hide edges
-  const over = 1.06;
-  video.style.transform = `scale(${(currentScale * over).toFixed(3)}) translate(${(sx/over).toFixed(1)}px, ${(sy/over).toFixed(1)}px)`;
-  video.style.display = 'block';
-  if (isRecording && video.readyState >= 2) {
-    recCtx.fillStyle = '#000';
-    recCtx.fillRect(0, 0, recCanvas.width, recCanvas.height);
-    recCtx.save();
-    recCtx.translate(recCanvas.width / 2 + sx, recCanvas.height / 2 + sy);
-    recCtx.scale(currentScale, currentScale);
-    const vw = video.videoWidth || recCanvas.width;
-    const vh = video.videoHeight || recCanvas.height;
-    recCtx.drawImage(video, -vw / 2, -vh / 2, vw, vh);
-    recCtx.restore();
-  }
-  updateLabels();
-  requestAnimationFrame(loop);
-}
-
-let currentScale = 1;
-let lastEnergy = 0;
-function loop() {
-  if (!isPlaying) return;
-  updateAudio();
-  const sens = +controls.sens.value;
-  const energy = Math.max(bass * 1.2, mid * 0.8) * sens;
-  const expandAmt = +controls.expand.value;
-  const shakeStrength = +controls.shake.value;
-  // Rising edge = hit
-  const hit = energy > lastEnergy + 0.06 && energy > 0.18;
-  lastEnergy = energy * 0.7 + lastEnergy * 0.3;
-  let targetScale = 1;
-  if (hit) {
-    // Hard snap on the beat
-    targetScale = 1 + Math.min(1, energy) * expandAmt * 0.7;
-  } else if (energy > 0.4) {
-    targetScale = 1 + energy * expandAmt * 0.35;
-  }
-  // Very fast attack on hit, fast release otherwise
-  const ease = hit ? 0.85 : 0.35;
-  currentScale += (targetScale - currentScale) * ease;
-  if (currentScale < 1.005) currentScale = 1;
-  // Shake only when energy is present
-  const shakeAmt = energy * shakeStrength * 18;
-  const sx = (Math.random() - 0.5) * shakeAmt;
-  const sy = (Math.random() - 0.5) * shakeAmt;
-  video.style.transform = `scale(${currentScale.toFixed(3)}) translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
-  updateLabels();
-  requestAnimationFrame(loop);
-}
 Object.values(controls).forEach(el => el.addEventListener('input', updateLabels));
 updateLabels();
 </script>
