@@ -139,12 +139,13 @@ function setRegion(mode) {
   if (!video.duration) return;
   const d = video.duration;
   if (mode === 'ambient') {
-    if (video.currentTime > d * 0.18) video.currentTime = 0;
+    video.currentTime = 0;
   } else if (mode === 'mid') {
-    video.currentTime = d * 0.35;
+    video.currentTime = d * 0.33;
   } else if (mode === 'bass') {
-    video.currentTime = d * 0.7;
+    video.currentTime = d * 0.66;
   }
+  if (video.paused) video.play().catch(() => {});
   currentMode = mode;
   document.getElementById('status').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
 }
@@ -166,8 +167,9 @@ function loop() {
     setRegion(next);
     if (next !== 'ambient') holdUntil = now + hold;
   }
-  // Keep ambient looping in the first quarter
-  if (currentMode === 'ambient' && video.currentTime > video.duration * 0.2) {
+  // Keep the active region playing forward
+  if (video.paused) video.play().catch(() => {});
+  if (currentMode === 'ambient' && video.currentTime > video.duration * 0.22) {
     video.currentTime = 0;
   }
   updateLabels();
