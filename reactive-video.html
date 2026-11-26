@@ -21,7 +21,7 @@
   button.primary { background:var(--accent); border-color:var(--accent); }
   input[type="file"] { font-size:12px; margin-top:4px; }
   #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#000; position:relative; overflow:hidden; }
-  canvas { max-width:100%; max-height:100%; }
+  canvas { width:100%; height:100%; object-fit:contain; }
   .hint { font-size:11px; color:var(--muted); margin-top:8px; line-height:1.4; }
   #exit-fs { display:none; position:absolute; top:12px; right:12px; z-index:10000; width:auto; padding:8px 14px; background:rgba(0,0,0,0.6); border:1px solid #444; }
 </style>
@@ -127,6 +127,13 @@ function updateAudio() {
   mid = (m / (len*0.35*255)) || 0;
   treble = (t / (len*0.5*255)) || 0;
 }
+function resizeCanvas() {
+  const stage = document.getElementById('stage');
+  canvas.width = stage.clientWidth;
+  canvas.height = stage.clientHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 function loop() {
   if (!isPlaying) return;
   updateAudio();
@@ -141,13 +148,25 @@ function loop() {
     const vw = video.videoWidth || 1280;
     const vh = video.videoHeight || 720;
     if (canvas.width !== vw) { canvas.width = vw; canvas.height = vh; }
+    // Fit video to canvas preserving aspect
+    const scale = Math.min(canvas.width / vw, canvas.height / vh);
+    const dw = vw * scale;
+    const dh = vh * scale;
+    const ox = (canvas.width - dw) / 2;
+    const oy = (canvas.height - dh) / 2;
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, vw, vh);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     const third = vw / 3;
-    // Draw only active regions
-    if (showBass) ctx.drawImage(video, 0, 0, third, vh, 0, 0, third, vh);
-    if (showMid) ctx.drawImage(video, third, 0, third, vh, third, 0, third, vh);
-    if (showTreble) ctx.drawImage(video, third*2, 0, third, vh, third*2, 0, third, vh);
+    // Draw regions with opacity based on energy
+    const drawRegion = (srcX, active, energy) => {
+      if (!active) return;
+      ctx.globalAlpha = 0.35 + Math.min(0.65, energy * 1.2);
+      ctx.drawImage(video, srcX, 0, third, vh, ox + (srcX / vw) * dw, oy, (third / vw) * dw, dh);
+      ctx.globalAlpha = 1;
+    };
+    drawRegion(0, showBass, b);
+    drawRegion(third, showMid, m);
+    drawRegion(third * 2, showTreble, t);
   }
   updateLabels();
   requestAnimationFrame(loop);
